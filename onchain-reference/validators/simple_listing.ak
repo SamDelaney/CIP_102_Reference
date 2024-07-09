@@ -2,7 +2,6 @@ use aiken/bytearray
 use aiken/list
 use aiken/math
 use aiken/option
-use aiken/string
 use aiken/transaction.{
   InlineDatum, Input, NoDatum, Output, OutputReference, ScriptContext, Spend,
   Transaction,
@@ -17,8 +16,7 @@ use onchain_reference/common.{
 }
 use onchain_reference/listing_utils.{Payout}
 use onchain_reference/test_utils.{
-  output_to_string, payout_to_string, placeholder_oref, placeholder_recipient,
-  recipients_to_input,
+  placeholder_oref, placeholder_recipient, recipients_to_input,
 }
 
 type ListingDatum {
@@ -62,22 +60,6 @@ validator {
         // ensure royalty amount is paid to the royalty address
         let payouts: List<Payout> =
           get_payouts(datum.seller, royalty_recipients, datum.price)
-
-        trace list.foldl(
-          outputs,
-          @"",
-          fn(output, current_str) {
-            string.concat(current_str, output_to_string(output))
-          },
-        )
-
-        trace list.foldl(
-          payouts,
-          @"",
-          fn(payout, current_str) {
-            string.concat(current_str, payout_to_string(payout))
-          },
-        )
 
         // check that the payouts are represented in the outputs and that enough are 
         datum.price <= check_payouts(outputs, payouts)
@@ -345,8 +327,6 @@ fn get_base_transaction(
       0,
       listing_datum.price,
     )
-
-  trace string.from_int(amount_to_royalties)
 
   let royalty_outputs: List<Output> =
     list.map(

@@ -33,6 +33,7 @@ pub fn placeholder_recipient(
   }
 }
 
+// Reconstruct an input from a list of RoyaltyRecipients
 pub fn recipients_to_input(
   recipients: List<RoyaltyRecipient>,
   policy_id: PolicyId,
@@ -43,6 +44,7 @@ pub fn recipients_to_input(
   }
 }
 
+// Reconstruct an output from a list of RoyaltyRecipients
 pub fn recipients_to_output(
   recipients: List<RoyaltyRecipient>,
   policy_id: PolicyId,
@@ -59,6 +61,8 @@ pub fn recipients_to_output(
     reference_script: None,
   }
 }
+
+// ------ to_string Utilities for Tracing Purposes ------
 
 pub fn output_to_string(output: Output) -> String {
   let value_string =
