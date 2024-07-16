@@ -17,8 +17,7 @@ If you want to interact with the library directly without setting up your own pr
 
 - Create a `.env` file in the parent directory with the structure defined in `.env.example`:
   - Fill in the `PUBLIC_CARDANO_NETWORK` variable with "Preview", "Preprod" or "Mainnet" depending on which network you want to use.
-  - Fill in the corresponding `BLOCKFROST_URL`.
-  - Fill in the 
+  - Fill in the corresponding `BLOCKFROST_URL`
 
 - Set up your wallet by filling in the `WALLET_ADDRESS` and `WALLET_PRIVATE_KEY` variables.
   - I recommend using `deno task generate-wallet` to generate a new wallet for testing this specifically. Once generated you can send the minimal funds you need for testing to the wallet from your hot wallet or from a testnet faucet.

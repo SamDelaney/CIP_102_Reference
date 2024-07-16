@@ -1,7 +1,7 @@
 import { createTimelockedMP, mintNFTs } from "../lib/mint.ts";
 import { MediaAssets, Royalty, TxBuild } from "../lib/types/index.ts";
 import { getRoyaltyPolicy } from "../lib/read.ts";
-import { Lucid, Blockfrost, Network, Script, PlutusVersion } from "https://deno.land/x/lucid@0.10.7/mod.ts";
+import { Lucid, Blockfrost, Network, Script, PlutusVersion, applyParamsToScript } from "https://deno.land/x/lucid@0.10.7/mod.ts";
 import { getEnv } from "./env.ts";
 import contracts from "../../onchain-reference/plutus.json" with { type: "json" };
 
@@ -27,9 +27,11 @@ lucid.selectWalletFromPrivateKey(privateKey)
 
 // isolate the contracts' cbor
 const type: PlutusVersion = "PlutusV2";
-const alwaysFails = {
-  type,
-  script: contracts.validators.find((v) => v.title === "always_fails.spend")?.compiledCode ?? ""
+const alwaysFails = (key: string) => { 
+  return {
+    type,
+    script: applyParamsToScript(contracts.validators.find((v) => v.title === "always_fails.spend")?.compiledCode ?? "", [key])
+  }
 }
 
 const timelockedMP = {
@@ -48,7 +50,10 @@ selectAction().then(console.log)
 async function selectAction() {
 	switch(purpose) {
 		case "mint-collection":
-			return await runTx(() => testTimelockedMint(lucid, timelockedMP, alwaysFails, walletAddress))
+    {
+      const validator = alwaysFails(lucid.utils.validatorToScriptHash(timelockedMP));
+			return await runTx(() => testTimelockedMint(lucid, timelockedMP, validator, walletAddress))
+    }
 		case "get-royalties":
 			return await getRoyaltyPolicy(Deno.args[1])
 		default:
