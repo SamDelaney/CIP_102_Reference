@@ -11,7 +11,11 @@ type ReduceRedeemer {
   policy_id: PolicyId,
 }
 
-validator {
+// parameterize against an identifying keyphrase to keep the address unique. addresses with many utxos can be slower to query against.
+// by default I recommend using the project's policyId
+//
+// REMEMBER TO PARAMETERIZE - THE SCRIPT WILL ALWAYS SUCCEED WITHOUT PARAMETERS
+validator(_key: ByteArray) {
   fn reduce(_d: Data, redeemer: ReduceRedeemer, context: ScriptContext) -> Bool {
     let tx = context.transaction
 
@@ -83,7 +87,8 @@ test should_reduce_recipient() {
         payment_credential: VerificationKeyCredential(mock_owner),
         stake_credential: None,
       },
-      fee: 625, // 1.6%
+      fee: 625,
+      // 1.6%
       min_fee: None,
       max_fee: None,
     }
@@ -93,7 +98,8 @@ test should_reduce_recipient() {
   let outputs =
     [
       recipients_to_output(
-        [RoyaltyRecipient { ..in_recipient, fee: 125 }], // 8%
+        [RoyaltyRecipient { ..in_recipient, fee: 125 }],
+        // 8%
         mock_policy_id,
       ),
     ]
@@ -104,7 +110,7 @@ test should_reduce_recipient() {
       purpose: Spend(input.output_reference),
     }
 
-  reduce([], redeemer, ctx)
+  reduce(mock_policy_id, [], redeemer, ctx)
 }
 
 test should_fail_increase_recipient() fail {
@@ -116,7 +122,8 @@ test should_fail_increase_recipient() fail {
         payment_credential: VerificationKeyCredential(mock_owner),
         stake_credential: None,
       },
-      fee: 125, // 8%
+      fee: 125,
+      // 8%
       min_fee: None,
       max_fee: None,
     }
@@ -126,7 +133,8 @@ test should_fail_increase_recipient() fail {
   let outputs =
     [
       recipients_to_output(
-        [RoyaltyRecipient { ..in_recipient, fee: 625 }], // 1.6%
+        [RoyaltyRecipient { ..in_recipient, fee: 625 }],
+        // 1.6%
         mock_policy_id,
       ),
     ]
@@ -137,7 +145,7 @@ test should_fail_increase_recipient() fail {
       purpose: Spend(input.output_reference),
     }
 
-  reduce([], redeemer, ctx)
+  reduce(mock_policy_id, [], redeemer, ctx)
 }
 
 test should_fail_no_token() fail {
@@ -170,7 +178,7 @@ test should_fail_no_token() fail {
       purpose: Spend(input.output_reference),
     }
 
-  reduce([], redeemer, ctx)
+  reduce(mock_policy_id, [], redeemer, ctx)
 }
 
 fn get_base_transaction(
