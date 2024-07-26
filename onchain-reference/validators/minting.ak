@@ -10,8 +10,10 @@ type Redeemer {
   BurnNft
 }
 
+// a simple timelocked MP which checks only for script owner signature and deadline
 validator(lock_time: PosixTime, owner: VerificationKeyHash) {
   fn minting_validator(redeemer: Redeemer, ctx: ScriptContext) -> Bool {
+    // deadline has not passed && owner has signed
     expect
       is_not_expired(ctx.transaction, lock_time)? && list.has(
         ctx.transaction.extra_signatories,
@@ -22,7 +24,7 @@ validator(lock_time: PosixTime, owner: VerificationKeyHash) {
         |> value.from_minted_value
         |> value.flatten
         |> list.at(0)
-
+    // check that stated purpose is accurate
     when redeemer is {
       MintNft -> (quantity >= 1)?
       BurnNft -> (quantity <= -1)?
@@ -30,6 +32,7 @@ validator(lock_time: PosixTime, owner: VerificationKeyHash) {
   }
 }
 
+// check posixtime against tx validity window
 fn is_not_expired(tx: Transaction, lock_time: PosixTime) {
   when tx.validity_range.upper_bound.bound_type is {
     Finite(bound_time) -> bound_time <= lock_time
@@ -49,62 +52,57 @@ const mock_policy_id = "some_fake_policy_id"
 const mock_asset_name = "some_fake_asset_name"
 
 test should_mint_nft() {
-  // GIVEN
   let redeemer = MintNft
+  // Happy path with 1 token minted
   let ctx =
     ScriptContext {
       purpose: Mint(mock_policy_id),
       transaction: get_base_transaction(1604063500000, 1704063500000, 1),
     }
-  // THEN
   minting_validator(mock_timestamp, mock_owner, redeemer, ctx) == True
 }
 
 test should_burn_nft() {
-  // GIVEN
   let redeemer = BurnNft
+  // Happy path with -1 tokens minted (1 token burned)
   let ctx =
     ScriptContext {
       purpose: Mint(mock_policy_id),
       transaction: get_base_transaction(1604063500000, 1704063500000, -1),
     }
-  // THEN
   minting_validator(mock_timestamp, mock_owner, redeemer, ctx) == True
 }
 
 test should_succeed_mint_multiple_asset_amount() {
-  // GIVEN
   let redeemer = MintNft
+  // Happy path with 5 tokens minted
   let ctx =
     ScriptContext {
       purpose: Mint(mock_policy_id),
       transaction: get_base_transaction(1604063500000, 1704063500000, 5),
     }
-  // THEN
   minting_validator(mock_timestamp, mock_owner, redeemer, ctx) == True
 }
 
 test should_throw_error_by_exceeded_time_lock() fail {
-  // GIVEN
   let redeemer = MintNft
   let ctx =
     ScriptContext {
       purpose: Mint(mock_policy_id),
       transaction: get_base_transaction(1604063500000, mock_timestamp, 1),
     }
-  // THEN
-  minting_validator(1704063500000, mock_owner, redeemer, ctx)
+  // parameterize with a posixtime before the end of the tx validity window
+  minting_validator(mock_timestamp - 5000, mock_owner, redeemer, ctx)
 }
 
 test should_throw_error_by_missing_signer() fail {
-  // GIVEN
   let redeemer = MintNft
   let ctx =
     ScriptContext {
       purpose: Mint(mock_policy_id),
       transaction: get_base_transaction(1604063500000, 1704063500000, 1),
     }
-  // THEN
+  // Parameterize off of different vkc
   minting_validator(mock_timestamp, "some_other_owner", redeemer, ctx)
 }
 

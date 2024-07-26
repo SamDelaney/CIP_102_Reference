@@ -79,8 +79,6 @@ fn get_payouts(
   price: Int,
 ) -> List<Payout> {
   // for each recipient
-  // DO THIS WORK? TEST IT
-
   let (payouts, paid_out) =
     list.foldl(
       royalty_recipients,
@@ -135,6 +133,7 @@ fn get_payouts(
 }
 
 /// Credit to JPG.Store's v3 open source contracts. Thank you for helping push the ecosystem forward!
+///
 /// Check that payouts and payout outputs
 /// are correct. Payouts are stored in the datum
 /// when assets are listed. On buy a transaction
@@ -194,6 +193,7 @@ test one_recipient_cip68_buy() {
   let listing_datum =
     ListingDatum { lot, seller: mock_owner, price: 1_000_000_000 }
 
+  // 8% royalty
   let royalty_recipients =
     [placeholder_recipient(80, mock_owner)]
 
@@ -221,6 +221,7 @@ test multi_recipient_cip68_buy() {
   let listing_datum =
     ListingDatum { lot, seller: mock_owner, price: 1_000_000_000 }
 
+  // 8%, 1.5%, 5%, 2%, 20%
   let royalty_recipients =
     [
       placeholder_recipient(80, mock_owner),
@@ -254,6 +255,7 @@ test no_royalty_paid() fail {
   let listing_datum =
     ListingDatum { lot, seller: mock_owner, price: 1_000_000_000 }
 
+  // 8% royalty
   let royalty_recipients =
     [placeholder_recipient(80, mock_owner)]
 
@@ -440,6 +442,7 @@ test check_payouts_with_trailing_outputs() {
       reference_script: None,
     }
 
+  // trailing outputs to simulate larger tx
   let outputs = list.concat([out_1, out_2], list.repeat(out_random, 100))
 
   98000000 == check_payouts(outputs, test_royalty_payouts)
