@@ -1,4 +1,4 @@
-import { fromText, toUnit, type Tx, Data, Address, Constr } from "https://deno.land/x/lucid@0.10.7/mod.ts";
+import { fromText, toUnit, type Tx, Data, Address } from "https://deno.land/x/lucid@0.10.7/mod.ts";
 
 import { asChainAddress, ChainAddressSchema } from './chain.ts';
 
@@ -33,12 +33,6 @@ export const RoyaltyInfoShape = RoyaltyInfoSchema as unknown as RoyaltyInfoType;
 export function toRoyaltyUnit(policyId: string) {
   return toUnit(policyId, ROYALTY_TOKEN_NAME, ROYALTY_TOKEN_LABEL);
 }
-
-export type RoyaltyConstr = Constr<
-	Map<string, string | bigint> | Map<string, string | bigint>[]
->;
-
-// 
 
 export const RoyaltyFlagSchema = Data.Object({ royalty_included: Data.Integer() })
 export type RoyaltyFlag = Data.Static<typeof RoyaltyFlagSchema>;

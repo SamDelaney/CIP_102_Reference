@@ -1,9 +1,9 @@
 import { createTimelockedMP, mintNFTs } from "../lib/mint.ts";
-import { MediaAssets, Royalty, TxBuild } from "../lib/types/index.ts";
-import { getRoyaltyPolicy } from "../lib/read.ts";
+import { MediaAssets, Royalty, TxBuild } from "../lib/common/index.ts";
 import { Lucid, Blockfrost, Network, Script, PlutusVersion, applyParamsToScript } from "https://deno.land/x/lucid@0.10.7/mod.ts";
 import { getEnv } from "./env.ts";
 import contracts from "../../onchain-reference/plutus.json" with { type: "json" };
+import { extractRoyaltyInfo } from "../index.ts";
 
 /**
  * MAIN
@@ -55,7 +55,7 @@ async function selectAction() {
 			return await runTx(() => testTimelockedMint(lucid, timelockedMP, validator, walletAddress))
     }
 		case "get-royalties":
-			return await getRoyaltyPolicy(Deno.args[1])
+			return await extractRoyaltyInfo(lucid, Deno.args[1])
 		default:
 			return { error: "no transaction selected" }
 	}
@@ -88,7 +88,7 @@ function testTimelockedMint(lucid: Lucid, mp: Script, validator: Script, walletA
   // configuration - these would come from user input. Adjust these however you wish.
   const mock_image = "ipfs://QmeTkA5bY4P3DUjhdtPc2MsT8G8keb7HAxjccKrLJN2xTz"
   const mock_name = "test"
-  const mock_deadline = new Date("2024-12-31T23:59:59Z").getTime()
+  const mock_deadline = new Date("2024-12-21T23:59:59Z").getTime()
   const mock_size = 5
   const mock_fee = 1.6
 

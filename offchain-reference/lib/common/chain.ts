@@ -1,4 +1,4 @@
-import { Data, Address, getAddressDetails } from "https://deno.land/x/lucid@0.10.7/mod.ts";
+import { Data, Address, getAddressDetails, Lucid } from "https://deno.land/x/lucid@0.10.7/mod.ts";
 
 // NFT Metadata Schema
 
@@ -43,6 +43,33 @@ export const ChainAddressSchema = Data.Object({
 
 export type ChainAddress = Data.Static<typeof ChainAddressSchema>;
 export const ChainAddress = ChainAddressSchema as unknown as ChainAddress;
+
+/// Converts a aiken chain address to a bech32 address
+export function toBech32Address(lucid: Lucid, address: ChainAddress): Address {
+  // Slightly silly lucid contains utils which references lucid only for a single field 'network'
+  const { utils } = lucid;
+
+  const paymentCredential = (() => {
+    if ('VerificationKeyCredential' in address.paymentCredential) {
+      return utils.keyHashToCredential(address.paymentCredential.VerificationKeyCredential[0]);
+    } else {
+      return utils.scriptHashToCredential(address.paymentCredential.ScriptCredential[0]);
+    }
+  })();
+  const stakeCredential = (() => {
+    if (!address.stakeCredential) return undefined;
+    if ('Inline' in address.stakeCredential) {
+      if ('VerificationKeyCredential' in address.stakeCredential.Inline[0]) {
+        return utils.keyHashToCredential(address.stakeCredential.Inline[0].VerificationKeyCredential[0]);
+      } else {
+        return utils.scriptHashToCredential(address.stakeCredential.Inline[0].ScriptCredential[0]);
+      }
+    } else {
+      return undefined;
+    }
+  })();
+  return utils.credentialToAddress(paymentCredential, stakeCredential);
+}
 
 /// Converts a Bech32 address to the aiken representation of a chain address
 export function asChainAddress(address: Address): ChainAddress {

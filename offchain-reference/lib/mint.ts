@@ -14,17 +14,17 @@ import {
 	toCip102RoyaltyDatum,
 	Royalty,
 	RoyaltyFlag
-} from './types/royalties.ts'
+} from './common/royalties.ts'
 
 import {
 	NFTMetadata,
 	NFTDatumMetadata
-} from './types/chain.ts'
+} from './common/chain.ts'
 
 import {
 	MediaAssets,
 	TxBuild
-} from './types/utility.ts'
+} from './common/utility.ts'
 
 /**
  * Included in this file:

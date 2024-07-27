@@ -1,4 +1,4 @@
-import { asset_transactions, output } from "../lib/types/chain.ts";
+import { asset_transactions, output } from "../lib/common/chain.ts";
 import { getEnv } from "../scripts/env.ts";
 
 // Barebones Blockfrost query wrappers. Based on Blockfrost's openAPI.
