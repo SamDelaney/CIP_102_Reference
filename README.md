@@ -25,4 +25,4 @@ Both sub-directories have instructions for use in their own README files at thei
 
 This code has not been audited and is NOT INTENDED FOR PRODUCTION, but to provide code examples of expected behavior.
 
-I still have some cleanup for clarity and consistency to be done here, and may dabble in some optimizations; however, it's now fully featured & ready for review by interested parties who don't mind digging through some sub-optimal code. Feedback is very welcome :)
+Several solutions are done in slightly suboptimal ways for clarity's or labor efficiency's sake. Feedback & contributions (in the form of Issues or Pull Requests) are very welcome :)

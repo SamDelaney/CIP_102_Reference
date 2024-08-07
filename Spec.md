@@ -51,7 +51,7 @@ A simple listing contract which locks a CIP 102 NFT & a datum with a price & sel
 - Listing datum
 	- Confirm the amount is getting paid to the seller, minus royalties
 
-## Offchain
+## Offchain - TODO
 
 - Find & read the requested listing datum
 - Find & read the associated royalty datum using the approach above

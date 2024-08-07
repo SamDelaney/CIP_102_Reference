@@ -102,7 +102,7 @@ test should_throw_error_by_missing_signer() fail {
       purpose: Mint(mock_policy_id),
       transaction: get_base_transaction(1604063500000, 1704063500000, 1),
     }
-  // Parameterize off of different vkc
+  // Parameterize off of different vkh
   minting_validator(mock_timestamp, "some_other_owner", redeemer, ctx)
 }
 
