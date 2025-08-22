@@ -6,7 +6,9 @@
   "scripts": {
     "test": "jest --runInBand",
     "generate-wallet": "node --loader ts-node/esm scripts/generate-wallet.ts",
-    "print-utxos": "node --loader ts-node/esm scripts/print-utxos.ts"
+    "print-utxos": "node --loader ts-node/esm scripts/print-utxos.ts",
+    "mint-collection": "node --loader ts-node/esm scripts/mock-frontend.ts mint-collection",
+    "get-royalties": "node --loader ts-node/esm scripts/mock-frontend.ts get-royalties"
   },
   "keywords": [],
   "author": "",
