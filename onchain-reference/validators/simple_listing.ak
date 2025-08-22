@@ -36,15 +36,17 @@ type ListingRedeemer {
   WithdrawOrUpdate
 }
 
-validator {
+validator listing_validator {
   /// Validate that the signer is the owner or that payouts
   /// are present as outputs and that the tag is correct.
-  fn spend(
+  spend(
     datum: ListingDatum,
     redeemer: ListingRedeemer,
-    ctx: ScriptContext,
+    _utxo: Data,
+    tx: Transaction,
   ) -> Bool {
-    let ScriptContext { transaction, purpose } = ctx
+    let Transaction { outputs, extra_signatories, reference_inputs, datums, .. } =
+      tx
 
     let Transaction { outputs, extra_signatories, reference_inputs, datums, .. } =
       transaction
