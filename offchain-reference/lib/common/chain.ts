@@ -1,132 +1,96 @@
-import {
-  Data,
-  Address,
-  getAddressDetails,
-  LucidEvolution,
-  keyHashToCredential,
-  scriptHashToCredential,
-  credentialToAddress,
-  Network,
-} from "@lucid-evolution/lucid";
+import type { Data } from "@meshsdk/common";
+import { addrBech32ToPlutusDataObj, serializeAddress } from "@meshsdk/core-cst";
 import { getEnv } from "../../scripts/env.js";
 
 const cardanoNetwork = getEnv("PUBLIC_CARDANO_NETWORK");
+const networkId = cardanoNetwork === "mainnet" ? 1 : 0;
 
-// NFT Metadata Schema
+// NFT datum metadata types (plain TypeScript - no schema DSL needed for MeshJS)
+export type NFTMetadata = Map<Data, Data>;
+export type NFTDatumMetadata = {
+  metadata: NFTMetadata;
+  version: bigint;
+  extra: Data;
+};
 
-export const NFTMetadataSchema = Data.Map(Data.Bytes(), Data.Any());
-export type NFTMetadata = Data.Static<typeof NFTMetadataSchema>;
-export const NFTMetadata = NFTMetadataSchema as unknown as NFTMetadata;
+// Aiken Address representation as Mesh Data (Constr(0, [payment_cred, stake_option]))
+export type ChainAddress = Data;
 
-export const NFTDatumMetadataSchema = Data.Object({
-  metadata: NFTMetadataSchema,
-  version: Data.Integer({ minimum: 1, maximum: 1 }),
-  extra: Data.Any(),
-});
-export type NFTDatumMetadata = Data.Static<typeof NFTDatumMetadataSchema>;
-export const NFTDatumMetadata =
-  NFTDatumMetadataSchema as unknown as NFTDatumMetadata;
+/// Converts a Aiken chain address Data object back to a bech32 address.
+/// addressData is the parsed Plutus data representation of Cardano's Address type:
+///   Constr(0, [Credential, Option<StakeCredential>])
+/// where Credential = Constr(0, [keyHash]) | Constr(1, [scriptHash])
+/// and   Option     = Constr(1, [])         | Constr(0, [StakeCredential])
+/// and   StakeCredential = Constr(0, [Credential]) for Inline
+export function toBech32Address(addressData: Data): string {
+  const addr = addressData as { alternative: number; fields: Data[] };
+  const paymentCred = addr.fields[0] as { alternative: number; fields: Data[] };
+  const stakeOption = addr.fields[1] as { alternative: number; fields: Data[] };
 
-// Address Schema
+  const isScript = paymentCred.alternative === 1;
+  const paymentHash = paymentCred.fields[0] as string;
 
-export const ChainCredentialSchema = Data.Enum([
-  Data.Object({
-    VerificationKeyCredential: Data.Tuple([
-      Data.Bytes({ minLength: 28, maxLength: 28 }),
-    ]),
-  }),
-  Data.Object({
-    ScriptCredential: Data.Tuple([
-      Data.Bytes({ minLength: 28, maxLength: 28 }),
-    ]),
-  }),
-]);
+  let stakeCredentialHash: string | undefined;
+  let stakeScriptCredentialHash: string | undefined;
 
-export const ChainAddressSchema = Data.Object({
-  paymentCredential: ChainCredentialSchema,
-  stakeCredential: Data.Nullable(
-    Data.Enum([
-      Data.Object({ Inline: Data.Tuple([ChainCredentialSchema]) }),
-      Data.Object({
-        Pointer: Data.Object({
-          slotNumber: Data.Integer(),
-          transactionIndex: Data.Integer(),
-          certificateIndex: Data.Integer(),
-        }),
-      }),
-    ])
-  ),
-});
-
-export type ChainAddress = Data.Static<typeof ChainAddressSchema>;
-export const ChainAddress = ChainAddressSchema as unknown as ChainAddress;
-
-/// Converts a aiken chain address to a bech32 address
-export function toBech32Address(
-  lucid: LucidEvolution,
-  address: ChainAddress
-): Address {
-  // Slightly silly lucid contains utils which references lucid only for a single field 'network'
-
-  const paymentCredential = (() => {
-    if ("VerificationKeyCredential" in address.paymentCredential) {
-      return keyHashToCredential(
-        address.paymentCredential.VerificationKeyCredential[0]
-      );
-    } else {
-      return scriptHashToCredential(
-        address.paymentCredential.ScriptCredential[0]
-      );
-    }
-  })();
-  const stakeCredential = (() => {
-    if (!address.stakeCredential) return undefined;
-    if ("Inline" in address.stakeCredential) {
-      if ("VerificationKeyCredential" in address.stakeCredential.Inline[0]) {
-        return keyHashToCredential(
-          address.stakeCredential.Inline[0].VerificationKeyCredential[0]
-        );
+  if (stakeOption.alternative === 0) {
+    // Some(StakeCredential)
+    const stakeCred = stakeOption.fields[0] as {
+      alternative: number;
+      fields: Data[];
+    };
+    if (stakeCred.alternative === 0) {
+      // Inline(Credential)
+      const innerCred = stakeCred.fields[0] as {
+        alternative: number;
+        fields: Data[];
+      };
+      if (innerCred.alternative === 0) {
+        stakeCredentialHash = innerCred.fields[0] as string;
       } else {
-        return scriptHashToCredential(
-          address.stakeCredential.Inline[0].ScriptCredential[0]
-        );
+        stakeScriptCredentialHash = innerCred.fields[0] as string;
       }
-    } else {
-      return undefined;
     }
-  })();
-  return credentialToAddress(
-    cardanoNetwork as Network,
-    paymentCredential,
-    stakeCredential
+  }
+
+  return serializeAddress(
+    {
+      pubKeyHash: isScript ? undefined : paymentHash,
+      scriptHash: isScript ? paymentHash : undefined,
+      stakeCredentialHash,
+      stakeScriptCredentialHash,
+    } as any,
+    networkId,
   );
 }
 
-/// Converts a Bech32 address to the aiken representation of a chain address
-export function asChainAddress(address: Address): ChainAddress {
-  const { paymentCredential, stakeCredential } = getAddressDetails(address);
+/// Converts a bech32 address to the Aiken chain address Data representation
+export function asChainAddress(address: string): ChainAddress {
+  // addrBech32ToPlutusDataObj uses { constructor, fields } but MeshJS requires
+  // { alternative, fields }. Recursively rename the key.
+  const raw = addrBech32ToPlutusDataObj<any>(address);
+  return toMeshData(raw);
+}
 
-  if (!paymentCredential) throw new Error("Not a valid payment address.");
-
-  return {
-    paymentCredential:
-      paymentCredential?.type === "Key"
-        ? {
-            VerificationKeyCredential: [paymentCredential.hash],
-          }
-        : { ScriptCredential: [paymentCredential.hash] },
-    stakeCredential: stakeCredential
-      ? {
-          Inline: [
-            stakeCredential.type === "Key"
-              ? {
-                  VerificationKeyCredential: [stakeCredential.hash],
-                }
-              : { ScriptCredential: [stakeCredential.hash] },
-          ],
-        }
-      : null,
-  };
+function toMeshData(data: any): Data {
+  if (typeof data !== "object" || data === null) return data as Data;
+  if (Array.isArray(data)) return data.map(toMeshData) as Data;
+  if (data instanceof Map) {
+    const m = new Map<Data, Data>();
+    for (const [k, v] of data.entries()) m.set(toMeshData(k), toMeshData(v));
+    return m as Data;
+  }
+  // { bytes: "hex" } → plain hex string (MeshJS represents bytes as hex strings)
+  if (Object.prototype.hasOwnProperty.call(data, "bytes")) {
+    return data.bytes as string;
+  }
+  if (Object.prototype.hasOwnProperty.call(data, "constructor")) {
+    return {
+      alternative: data.constructor as number,
+      fields: (data.fields as any[]).map(toMeshData),
+    } as Data;
+  }
+  return data as Data;
 }
 
 // based on Blockfrost's openAPI

@@ -1,4 +1,4 @@
-import { Script, Network } from "@lucid-evolution/lucid";
+import type { MeshTxBuilder } from "@meshsdk/transaction";
 
 // Tx Builder Output
 export type TxBuild =
@@ -8,7 +8,7 @@ export type TxBuild =
       policyId?: undefined;
     }
   | {
-      tx: any;
+      tx: MeshTxBuilder;
       policyId: string;
       error?: undefined;
     };

@@ -75,7 +75,7 @@ This project has been migrated from Deno to Node.js. Key changes include:
 - Updated environment variable handling to use `process.env` instead of `Deno.env`
 - Changed file system operations to use Node.js `fs` module
 - Updated import paths to use `.js` extensions for ES modules
-- Replaced `lucid-cardano` with `@lucid-evolution/lucid` package
+- Replaced `lucid-cardano` with `@evolution-sdk/lucid` package
 
 ## Available Scripts
 
