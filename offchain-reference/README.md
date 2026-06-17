@@ -10,7 +10,7 @@ In the meantime, you can clone or copy the contents of the `/lib/` folder wherev
 
 ## Direct Use
 
-If you want to interact with the library directly without setting up your own project, you can run the code directly with the mock frontend defined in `scripts/mock-frontend.ts`
+If you want to interact with the library directly without setting up your own project, you can use either the CLI (`scripts/cli.ts`) or the mock frontend (`scripts/mock-frontend.ts`).
 
 ### Setup
 
@@ -25,7 +25,6 @@ If you want to interact with the library directly without setting up your own pr
 - Create a Blockfrost project if you don't already have one. These are free up to a certain number of queries.
 
 - Create a `.env` file in the project directory with the structure defined in `.env.example`:
-
   - Fill in the `PUBLIC_CARDANO_NETWORK` variable with "Preview", "Preprod" or "Mainnet" depending on which network you want to use.
   - Fill in the corresponding `BLOCKFROST_URL`
 
@@ -51,21 +50,69 @@ addr_test1vqhjcudw5m5pmehwtwduts2ayz2rlpm7vjq0ql6exsz6czq2gr7h8
 ]
 ```
 
-### Reading Royalties
+### CLI
 
-You can query the royalty information for a given collection with the following query:
+The CLI (`npm run cli`) is the recommended way to interact with the library from the command line. All parameters are passed as flags.
 
-`npm run mock-frontend get-royalties [policyId]`
+#### Reading Royalties
 
-This does not return CIP-27 royalties.
+Query the royalty information for a given policy ID:
 
-### Minting CIP-102 Compliant NFTs
+```bash
+npm run cli get-royalties <policyId>
+```
 
-You can mint a collection with multiple CIP-68 nfts & a royalty policy with
+Example:
 
-`npm run mock-frontend mint-collection`
+```bash
+npm run cli get-royalties c0c70f8c897376e09e1b7cdf551e86f1e4a7f5735539e41b089b3c87
+```
 
-Instead of using the command line, this takes its parameters from the `mock_` prefixed consts at the start of the `testTimelockedMint` function in `mock-frontend.ts`.
+#### Minting a Collection
+
+Mint a timelocked CIP-68 NFT collection with a CIP-102 royalty. All required parameters are passed as flags:
+
+```bash
+npm run cli -- mint-collection \
+  --name <base-name> \
+  --image <ipfs-url> \
+  --deadline <ISO-date> \
+  --fee <percent> \
+  [--size <count>] \
+  [--royalty-address <address>]
+```
+
+| Flag                | Description                                                         | Required                       |
+| ------------------- | ------------------------------------------------------------------- | ------------------------------ |
+| `--name`            | Base name for the NFT assets (e.g. `myNFT` → `myNFT0`, `myNFT1`, …) | Yes                            |
+| `--image`           | IPFS URL for the NFT image                                          | Yes                            |
+| `--deadline`        | Minting deadline in ISO 8601 format (e.g. `2027-12-22T23:59:59Z`)   | Yes                            |
+| `--fee`             | Royalty fee as a percentage (e.g. `1.6` for 1.6%)                   | Yes                            |
+| `--size`            | Number of NFTs to mint                                              | No (default: `1`)              |
+| `--royalty-address` | Royalty recipient address                                           | No (default: `WALLET_ADDRESS`) |
+
+> **Note:** flags that begin with `--` must be separated from `npm run cli` by a `--` argument so npm doesn't intercept them. Positional arguments (like the policy ID for `get-royalties`) can be passed directly without `--`.
+
+Example:
+
+```bash
+npm run cli -- mint-collection \
+  --name "myNFT" \
+  --image "ipfs://QmeTkA5bY4P3DUjhdtPc2MsT8G8keb7HAxjccKrLJN2xTz" \
+  --deadline "2027-12-22T23:59:59Z" \
+  --size 5 \
+  --fee 1.6
+```
+
+To view all available options:
+
+```bash
+npm run cli -- --help
+```
+
+### Mock Frontend (legacy)
+
+The mock frontend (`scripts/mock-frontend.ts`) is the original script-based interface. Parameters for `mint-collection` are set as hardcoded constants at the top of the `testTimelockedMint` function rather than via CLI flags.
 
 ## Migration Notes
 
@@ -81,5 +128,6 @@ This project has been migrated from Deno to Node.js. Key changes include:
 
 - `npm run generate-wallet` - Generate a new wallet for testing
 - `npm run print-utxos` - Print UTXOs in the connected wallet
-- `npm run mock-frontend [action]` - Run the mock frontend with specified action
+- `npm run cli <command> [options]` - CLI interface (recommended)
+- `npm run mock-frontend [action]` - Legacy mock frontend
 - `npm test` - Run tests

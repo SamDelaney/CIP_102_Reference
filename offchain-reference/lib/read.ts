@@ -3,12 +3,13 @@ import {
   toRoyaltyUnit,
   type Royalty,
 } from "./common/royalties.js";
-import { toBech32Address } from "./common/chain.js";
+import { toBech32Address, toMeshData } from "./common/chain.js";
 import { parseDatumCbor } from "@meshsdk/core-cst";
 import type { BlockfrostProvider } from "@meshsdk/provider";
 
 export function toRoyaltyInfo(chainInfo: any, networkId: number): Royalty[] {
   // chainInfo = Constr(0, [recipients: Data[], version: bigint, extra: Data])
+  // Input must be pre-normalised via toMeshData so fields[0] is a plain array.
   const recipients: any[] = chainInfo.fields[0];
   return recipients.map((recipient: any) => {
     const addressData = recipient.fields[0];
@@ -56,7 +57,7 @@ export async function extractRoyaltyInfo(
     const datumCbor = utxos[0].output.plutusData;
     if (!datumCbor) return undefined;
 
-    const chainInfo = parseDatumCbor<any>(datumCbor);
+    const chainInfo: any = toMeshData(parseDatumCbor<any>(datumCbor));
     return toRoyaltyInfo(chainInfo, networkId);
   } catch (err) {
     console.log("Error getting royalties");

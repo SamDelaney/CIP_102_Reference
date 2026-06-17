@@ -34,22 +34,16 @@ export function toBech32Address(addressData: Data): string {
   let stakeScriptCredentialHash: string | undefined;
 
   if (stakeOption.alternative === 0) {
-    // Some(StakeCredential)
+    // Some(StakeCredential): Constr(0, [Constr(type, [hash])])
     const stakeCred = stakeOption.fields[0] as {
       alternative: number;
       fields: Data[];
     };
+    // stakeCred = Constr(0, [hash]) for VKey, Constr(1, [hash]) for Script
     if (stakeCred.alternative === 0) {
-      // Inline(Credential)
-      const innerCred = stakeCred.fields[0] as {
-        alternative: number;
-        fields: Data[];
-      };
-      if (innerCred.alternative === 0) {
-        stakeCredentialHash = innerCred.fields[0] as string;
-      } else {
-        stakeScriptCredentialHash = innerCred.fields[0] as string;
-      }
+      stakeCredentialHash = stakeCred.fields[0] as string;
+    } else {
+      stakeScriptCredentialHash = stakeCred.fields[0] as string;
     }
   }
 
@@ -72,7 +66,7 @@ export function asChainAddress(address: string): ChainAddress {
   return toMeshData(raw);
 }
 
-function toMeshData(data: any): Data {
+export function toMeshData(data: any): Data {
   if (typeof data !== "object" || data === null) return data as Data;
   if (Array.isArray(data)) return data.map(toMeshData) as Data;
   if (data instanceof Map) {
@@ -84,9 +78,26 @@ function toMeshData(data: any): Data {
   if (Object.prototype.hasOwnProperty.call(data, "bytes")) {
     return data.bytes as string;
   }
+  // { int: BigInt } → BigInt (parseDatumCbor wraps integers this way)
+  if (Object.prototype.hasOwnProperty.call(data, "int")) {
+    return BigInt(data.int) as unknown as Data;
+  }
+  // { list: [...] } → plain JS array (parseDatumCbor uses this for CBOR lists)
+  if (Object.prototype.hasOwnProperty.call(data, "list")) {
+    return (data.list as any[]).map(toMeshData) as Data;
+  }
+  // { map: [{k,v}] } → JS Map (parseDatumCbor uses this for CBOR maps)
+  if (Object.prototype.hasOwnProperty.call(data, "map")) {
+    const m = new Map<Data, Data>();
+    for (const { k, v } of data.map as { k: any; v: any }[]) {
+      m.set(toMeshData(k), toMeshData(v));
+    }
+    return m as Data;
+  }
   if (Object.prototype.hasOwnProperty.call(data, "constructor")) {
     return {
-      alternative: data.constructor as number,
+      // getAlternative() returns a BigInt; convert to number for comparison
+      alternative: Number(data.constructor),
       fields: (data.fields as any[]).map(toMeshData),
     } as Data;
   }
