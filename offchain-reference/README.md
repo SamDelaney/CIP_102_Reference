@@ -1,30 +1,40 @@
-# Using the CIP-102 Offchain Library
+# CIP-102 Offchain Library (Node.js)
+
+This is the Node.js version of the CIP-102 offchain library, migrated from the original Deno implementation.
 
 ## Importing
-The contents of this library are available to be imported from `index.ts` and will eventually be published to a public package manager (or two). I will add instructions here when I do.
+
+The contents of this library are available to be imported from `index.ts` and will eventually be published to a public package manager.
 
 In the meantime, you can clone or copy the contents of the `/lib/` folder wherever you need it.
 
 ## Direct Use
 
-If you want to interact with the library directly without setting up your own project, you can run the code directly with the mock frontend defined in `scripts/mock-frontend.ts`
+If you want to interact with the library directly without setting up your own project, you can use either the CLI (`scripts/cli.ts`) or the mock frontend (`scripts/mock-frontend.ts`).
 
 ### Setup
 
-- Make sure you have [Deno](https://deno.com/) installed.
+- Make sure you have [Node.js](https://nodejs.org/) installed.
+
+- Install dependencies:
+
+  ```bash
+  npm install
+  ```
 
 - Create a Blockfrost project if you don't already have one. These are free up to a certain number of queries.
 
-- Create a `.env` file in the parent directory with the structure defined in `.env.example`:
+- Create a `.env` file in the project directory with the structure defined in `.env.example`:
   - Fill in the `PUBLIC_CARDANO_NETWORK` variable with "Preview", "Preprod" or "Mainnet" depending on which network you want to use.
   - Fill in the corresponding `BLOCKFROST_URL`
 
 - Set up your wallet by filling in the `WALLET_ADDRESS` and `WALLET_PRIVATE_KEY` variables.
-  - I recommend using `deno task generate-wallet` to generate a new wallet for testing this specifically. Once generated you can send the minimal funds you need for testing to the wallet from your hot wallet or from a testnet faucet.
+  - I recommend using `npm run generate-wallet` to generate a new wallet for testing this specifically. Once generated you can send the minimal funds you need for testing to the wallet from your hot wallet or from a testnet faucet.
 
-To verify your setup worked, or if you want to check the contents of the wallet you have connected, I've included a handy `deno task print-utxos` script.
+To verify your setup worked, or if you want to check the contents of the wallet you have connected, I've included a handy `npm run print-utxos` script.
 
 You should see something like this:
+
 ```
 addr_test1vqhjcudw5m5pmehwtwduts2ayz2rlpm7vjq0ql6exsz6czq2gr7h8
 [
@@ -40,16 +50,113 @@ addr_test1vqhjcudw5m5pmehwtwduts2ayz2rlpm7vjq0ql6exsz6czq2gr7h8
 ]
 ```
 
-### Reading Royalties
-You can query the royalty information for a given collection with the following query:
+### CLI
 
-`deno task get-royalties [policyId]`
+The CLI (`npm run cli`) is the recommended way to interact with the library from the command line. All parameters are passed as flags.
 
-This does not return CIP-27 royalties.
+#### Reading Royalties
 
-### Minting CIP-102 Compliant NFTs
-You can mint a collection with multiple CIP-68 nfts & a royalty policy with
+Query the royalty information for a given policy ID:
 
-`deno task mint-collection`
+```bash
+npm run cli get-royalties <policyId>
+```
 
-Instead of using the command line, this takes its parameters from the `mock_` prefixed consts at the start of the `testTimelockedMint` function in `mock-frontend.ts`.
+Example:
+
+```bash
+npm run cli get-royalties c0c70f8c897376e09e1b7cdf551e86f1e4a7f5735539e41b089b3c87
+```
+
+#### Minting a Collection
+
+Mint a timelocked CIP-68 NFT collection with a CIP-102 royalty. All required parameters are passed as flags:
+
+```bash
+npm run cli -- -- mint-collection \
+  --name <base-name> \
+  --image <ipfs-url> \
+  --deadline <ISO-date> \
+  --fee <percent> \
+  [--size <count>] \
+  [--royalty-address <address>] \
+  [--ref-address <address>]
+```
+
+| Flag                | Description                                                                  | Required                                                                  |
+| ------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `--name`            | Base name for the NFT assets (e.g. `myNFT` → `myNFT0`, `myNFT1`, …)          | Yes                                                                       |
+| `--image`           | IPFS URL for the NFT image                                                   | Yes                                                                       |
+| `--deadline`        | Minting deadline in ISO 8601 format (e.g. `2027-12-22T23:59:59Z`)            | Yes                                                                       |
+| `--fee`             | Royalty fee as a percentage (e.g. `1.6` for 1.6%)                            | Yes                                                                       |
+| `--size`            | Number of NFTs to mint                                                       | No (default: `1`)                                                         |
+| `--royalty-address` | Royalty recipient address                                                    | No (default: `WALLET_ADDRESS`)                                            |
+| `--ref-address`     | Address to send CIP-68 reference (100) tokens and the royalty (500) token to | No (default: `alwaysFails` script parameterized by your payment key hash) |
+
+> **Note:** Use `npm run cli -- --` (two `--` separators) before the subcommand when passing flags. The first `--` tells npm to stop processing its own options; the second `--` is passed to the script to signal end of positional arguments. This prevents npm from intercepting flags like `--name` (a reserved npm config key) or warning about unknown ones. Positional arguments (like the policy ID for `get-royalties`) can be passed directly with just one `--`.
+
+Example:
+
+```bash
+npm run cli -- -- mint-collection \
+  --name "myNFT" \
+  --image "ipfs://QmeTkA5bY4P3DUjhdtPc2MsT8G8keb7HAxjccKrLJN2xTz" \
+  --deadline "2027-12-22T23:59:59Z" \
+  --size 5 \
+  --fee 1.6
+```
+
+The CLI will prompt for confirmation before submitting the transaction. Type `y` to proceed or anything else to abort.
+
+> **Collateral:** Plutus transactions require a pure-ADA UTxO as collateral. If your wallet only has UTxOs that contain native tokens, the command will fail with a clear error. Run `npm run set-collateral` first to create a suitable collateral UTxO (see [Setting Up Collateral](#setting-up-collateral) below).
+
+To view all available options:
+
+```bash
+npm run cli -- -- --help
+```
+
+### Mock Frontend (legacy)
+
+The mock frontend (`scripts/mock-frontend.ts`) is the original script-based interface. Parameters for `mint-collection` are set as hardcoded constants at the top of the `testTimelockedMint` function rather than via CLI flags.
+
+### Setting Up Collateral
+
+Cardano Plutus transactions require a dedicated pure-ADA UTxO as collateral (a UTxO that holds only lovelace, no native tokens). If all your UTxOs contain NFTs or other tokens, minting will fail.
+
+Run the following command to send a small amount of ADA from your wallet to itself, creating a fresh pure-ADA UTxO:
+
+```bash
+# Default: reserves 5 ADA
+npm run set-collateral
+
+# Custom amount
+npm run set-collateral -- -- --amount 10
+```
+
+The script will:
+
+1. Check whether a suitable collateral UTxO already exists and warn you if so
+2. Prompt for confirmation before submitting
+3. Send the specified ADA to your own address
+
+Once confirmed, the collateral UTxO is automatically preserved during subsequent minting transactions — the coin selector will never spend it.
+
+## Migration Notes
+
+This project has been migrated from Deno to Node.js. Key changes include:
+
+- Replaced Deno imports with Node.js equivalents
+- Updated environment variable handling to use `process.env` instead of `Deno.env`
+- Changed file system operations to use Node.js `fs` module
+- Updated import paths to use `.js` extensions for ES modules
+- Replaced `lucid-cardano` with `@meshsdk/*` packages
+
+## Available Scripts
+
+- `npm run generate-wallet` - Generate a new wallet for testing
+- `npm run print-utxos` - Print UTXOs in the connected wallet
+- `npm run set-collateral [-- -- --amount <ADA>]` - Create a pure-ADA collateral UTxO
+- `npm run cli <command> [options]` - CLI interface (recommended)
+- `npm run mock-frontend [action]` - Legacy mock frontend
+- `npm test` - Run tests

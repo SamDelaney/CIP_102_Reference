@@ -15,9 +15,8 @@ type ReduceRedeemer {
 // by default I recommend using the project's policyId
 //
 // REMEMBER TO PARAMETERIZE - THE SCRIPT WILL ALWAYS SUCCEED WITHOUT PARAMETERS
-validator(_key: ByteArray) {
-  fn reduce(_d: Data, redeemer: ReduceRedeemer, context: ScriptContext) -> Bool {
-    let tx = context.transaction
+validator reduce(_key: ByteArray) {
+  spend(_d: Data, redeemer: ReduceRedeemer, _utxo: Data, tx: Transaction) -> Bool {
 
     // find output datum
     expect Some(royalty_output) =

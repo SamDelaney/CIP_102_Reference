@@ -11,16 +11,16 @@ type Redeemer {
 }
 
 // a simple timelocked MP which checks only for script owner signature and deadline
-validator(lock_time: PosixTime, owner: VerificationKeyHash) {
-  fn minting_validator(redeemer: Redeemer, ctx: ScriptContext) -> Bool {
+validator minting_validator(lock_time: PosixTime, owner: VerificationKeyHash) {
+  mint(redeemer: Redeemer, _policy_id: Data, self: Transaction) -> Bool {
     // deadline has not passed && owner has signed
     expect
-      is_not_expired(ctx.transaction, lock_time)? && list.has(
-        ctx.transaction.extra_signatories,
+      is_not_expired(self, lock_time)? && list.has(
+        self.extra_signatories,
         owner,
       )?
     expect Some((_, _, quantity)) =
-      ctx.transaction.mint
+      self.mint
         |> value.from_minted_value
         |> value.flatten
         |> list.at(0)

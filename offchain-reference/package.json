@@ -1,0 +1,38 @@
+{
+  "name": "offchain-reference",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest --runInBand",
+    "generate-wallet": "node --loader ts-node/esm scripts/generate-wallet.ts",
+    "print-utxos": "node --loader ts-node/esm scripts/print-utxos.ts",
+    "set-collateral": "node --loader ts-node/esm scripts/set-collateral.ts",
+    "mint-collection": "node --loader ts-node/esm scripts/mock-frontend.ts mint-collection",
+    "get-royalties": "node --loader ts-node/esm scripts/mock-frontend.ts get-royalties",
+    "cli": "node --loader ts-node/esm scripts/cli.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "devDependencies": {
+    "@babel/preset-typescript": "^7.27.1",
+    "@types/libsodium-wrappers-sumo": "^0.7.8",
+    "dotenv-parse-variables": "^2.0.0",
+    "jest": "^30.0.0",
+    "ts-jest": "^29.4.0",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@meshsdk/core": "^1.9.0-beta.102",
+    "@meshsdk/core-cst": "^1.9.0-beta.102",
+    "@meshsdk/provider": "^1.9.0-beta.102",
+    "@meshsdk/transaction": "^1.9.0-beta.102",
+    "@meshsdk/wallet": "^1.9.0-beta.102",
+    "@types/jest": "^29.5.14",
+    "dotenv": "^16.5.0",
+    "fs": "^0.0.1-security",
+    "ts-node": "^10.9.2"
+  }
+}

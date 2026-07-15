@@ -2,8 +2,8 @@
 // by default I recommend using the project's policyId
 //
 // REMEMBER TO PARAMETERIZE - THE SCRIPT WILL ALWAYS SUCCEED WITHOUT PARAMETERS
-validator(_key: ByteArray) {
-  fn spend(_datum: Data, _redeemer: Data, _context: Data) -> Bool {
+validator always_fails(_key: ByteArray) {
+  spend(_datum: Data, _redeemer: Data, _utxo: Data, _tx: Transaction) -> Bool {
     False
   }
 }

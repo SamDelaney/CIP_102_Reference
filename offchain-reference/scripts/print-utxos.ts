@@ -1,16 +1,12 @@
-import { Lucid, Blockfrost, Network } from 'https://deno.land/x/lucid@0.10.7/mod.ts';
+import { BlockfrostProvider } from "@meshsdk/provider";
+import { getEnv } from "./env.ts";
 
-import { getEnv } from './env.ts';
-
-const network = getEnv('PUBLIC_CARDANO_NETWORK');
-const address = getEnv('WALLET_ADDRESS');
-const blockfrostUrl = getEnv(`BLOCKFROST_URL`);
-const blockfrostKey = getEnv(`BLOCKFROST_PROJECT_KEY`);
+const address = getEnv("WALLET_ADDRESS");
+const projectId = getEnv("BLOCKFROST_PROJECT_KEY");
 
 console.log(address);
 
-const blockfrost = new Blockfrost(blockfrostUrl, blockfrostKey);
-const lucid = await Lucid.new(blockfrost, network as Network);
-const utxos = await lucid.utxosAt(address);
+const provider = new BlockfrostProvider(projectId);
+const utxos = await provider.fetchAddressUTxOs(address);
 
-console.log(utxos);
+console.log(JSON.stringify(utxos, null, 2));

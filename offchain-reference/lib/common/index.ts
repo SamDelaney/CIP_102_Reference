@@ -1,3 +1,3 @@
-export * from './chain.ts'
-export * from './royalties.ts'
-export * from './utility.ts'
+export * from "./chain.js";
+export * from "./royalties.js";
+export * from "./utility.js";

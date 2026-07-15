@@ -1,101 +1,107 @@
-import { Data, Address, getAddressDetails, Lucid } from "https://deno.land/x/lucid@0.10.7/mod.ts";
+import type { Data } from "@meshsdk/common";
+import { addrBech32ToPlutusDataObj, serializeAddress } from "@meshsdk/core-cst";
+import { getEnv } from "../../scripts/env.js";
 
-// NFT Metadata Schema
+const cardanoNetwork = getEnv("PUBLIC_CARDANO_NETWORK");
+const networkId = cardanoNetwork === "mainnet" ? 1 : 0;
 
-export const NFTMetadataSchema = Data.Map(Data.Bytes(), Data.Any());
-export type NFTMetadata = Data.Static<typeof NFTMetadataSchema>;
-export const NFTMetadata = NFTMetadataSchema as unknown as NFTMetadata;
+// NFT datum metadata types (plain TypeScript - no schema DSL needed for MeshJS)
+export type NFTMetadata = Map<Data, Data>;
+export type NFTDatumMetadata = {
+  metadata: NFTMetadata;
+  version: bigint;
+  extra: Data;
+};
 
-export const NFTDatumMetadataSchema = Data.Object({
-  metadata: NFTMetadataSchema,
-  version: Data.Integer({ minimum: 1, maximum: 1 }),
-  extra: Data.Any(),
-});
-export type NFTDatumMetadata = Data.Static<typeof NFTDatumMetadataSchema>;
-export const NFTDatumMetadata = NFTDatumMetadataSchema as unknown as NFTDatumMetadata
+// Aiken Address representation as Mesh Data (Constr(0, [payment_cred, stake_option]))
+export type ChainAddress = Data;
 
-// Address Schema
+/// Converts a Aiken chain address Data object back to a bech32 address.
+/// addressData is the parsed Plutus data representation of Cardano's Address type:
+///   Constr(0, [Credential, Option<StakeCredential>])
+/// where Credential = Constr(0, [keyHash]) | Constr(1, [scriptHash])
+/// and   Option     = Constr(1, [])         | Constr(0, [StakeCredential])
+/// and   StakeCredential = Constr(0, [Credential]) for Inline
+export function toBech32Address(addressData: Data): string {
+  const addr = addressData as { alternative: number; fields: Data[] };
+  const paymentCred = addr.fields[0] as { alternative: number; fields: Data[] };
+  const stakeOption = addr.fields[1] as { alternative: number; fields: Data[] };
 
-export const ChainCredentialSchema = Data.Enum([
-  Data.Object({
-    VerificationKeyCredential: Data.Tuple([Data.Bytes({ minLength: 28, maxLength: 28 })]),
-  }),
-  Data.Object({
-    ScriptCredential: Data.Tuple([Data.Bytes({ minLength: 28, maxLength: 28 })]),
-  }),
-]);
+  const isScript = paymentCred.alternative === 1;
+  const paymentHash = paymentCred.fields[0] as string;
 
-export const ChainAddressSchema = Data.Object({
-  paymentCredential: ChainCredentialSchema,
-  stakeCredential: Data.Nullable(
-    Data.Enum([
-      Data.Object({ Inline: Data.Tuple([ChainCredentialSchema]) }),
-      Data.Object({
-        Pointer: Data.Object({
-          slotNumber: Data.Integer(),
-          transactionIndex: Data.Integer(),
-          certificateIndex: Data.Integer(),
-        }),
-      }),
-    ])
-  ),
-});
+  let stakeCredentialHash: string | undefined;
+  let stakeScriptCredentialHash: string | undefined;
 
-export type ChainAddress = Data.Static<typeof ChainAddressSchema>;
-export const ChainAddress = ChainAddressSchema as unknown as ChainAddress;
-
-/// Converts a aiken chain address to a bech32 address
-export function toBech32Address(lucid: Lucid, address: ChainAddress): Address {
-  // Slightly silly lucid contains utils which references lucid only for a single field 'network'
-  const { utils } = lucid;
-
-  const paymentCredential = (() => {
-    if ('VerificationKeyCredential' in address.paymentCredential) {
-      return utils.keyHashToCredential(address.paymentCredential.VerificationKeyCredential[0]);
+  if (stakeOption.alternative === 0) {
+    // Some(StakeCredential): Constr(0, [Constr(type, [hash])])
+    const stakeCred = stakeOption.fields[0] as {
+      alternative: number;
+      fields: Data[];
+    };
+    // stakeCred = Constr(0, [hash]) for VKey, Constr(1, [hash]) for Script
+    if (stakeCred.alternative === 0) {
+      stakeCredentialHash = stakeCred.fields[0] as string;
     } else {
-      return utils.scriptHashToCredential(address.paymentCredential.ScriptCredential[0]);
+      stakeScriptCredentialHash = stakeCred.fields[0] as string;
     }
-  })();
-  const stakeCredential = (() => {
-    if (!address.stakeCredential) return undefined;
-    if ('Inline' in address.stakeCredential) {
-      if ('VerificationKeyCredential' in address.stakeCredential.Inline[0]) {
-        return utils.keyHashToCredential(address.stakeCredential.Inline[0].VerificationKeyCredential[0]);
-      } else {
-        return utils.scriptHashToCredential(address.stakeCredential.Inline[0].ScriptCredential[0]);
-      }
-    } else {
-      return undefined;
-    }
-  })();
-  return utils.credentialToAddress(paymentCredential, stakeCredential);
+  }
+
+  return serializeAddress(
+    {
+      pubKeyHash: isScript ? undefined : paymentHash,
+      scriptHash: isScript ? paymentHash : undefined,
+      stakeCredentialHash,
+      stakeScriptCredentialHash,
+    } as any,
+    networkId,
+  );
 }
 
-/// Converts a Bech32 address to the aiken representation of a chain address
-export function asChainAddress(address: Address): ChainAddress {
-  const { paymentCredential, stakeCredential } = getAddressDetails(address);
+/// Converts a bech32 address to the Aiken chain address Data representation
+export function asChainAddress(address: string): ChainAddress {
+  // addrBech32ToPlutusDataObj uses { constructor, fields } but MeshJS requires
+  // { alternative, fields }. Recursively rename the key.
+  const raw = addrBech32ToPlutusDataObj<any>(address);
+  return toMeshData(raw);
+}
 
-  if (!paymentCredential) throw new Error('Not a valid payment address.');
-
-  return {
-    paymentCredential:
-      paymentCredential?.type === 'Key'
-        ? {
-            VerificationKeyCredential: [paymentCredential.hash],
-          }
-        : { ScriptCredential: [paymentCredential.hash] },
-    stakeCredential: stakeCredential
-      ? {
-          Inline: [
-            stakeCredential.type === 'Key'
-              ? {
-                  VerificationKeyCredential: [stakeCredential.hash],
-                }
-              : { ScriptCredential: [stakeCredential.hash] },
-          ],
-        }
-      : null,
-  };
+export function toMeshData(data: any): Data {
+  if (typeof data !== "object" || data === null) return data as Data;
+  if (Array.isArray(data)) return data.map(toMeshData) as Data;
+  if (data instanceof Map) {
+    const m = new Map<Data, Data>();
+    for (const [k, v] of data.entries()) m.set(toMeshData(k), toMeshData(v));
+    return m as Data;
+  }
+  // { bytes: "hex" } → plain hex string (MeshJS represents bytes as hex strings)
+  if (Object.prototype.hasOwnProperty.call(data, "bytes")) {
+    return data.bytes as string;
+  }
+  // { int: BigInt } → BigInt (parseDatumCbor wraps integers this way)
+  if (Object.prototype.hasOwnProperty.call(data, "int")) {
+    return BigInt(data.int) as unknown as Data;
+  }
+  // { list: [...] } → plain JS array (parseDatumCbor uses this for CBOR lists)
+  if (Object.prototype.hasOwnProperty.call(data, "list")) {
+    return (data.list as any[]).map(toMeshData) as Data;
+  }
+  // { map: [{k,v}] } → JS Map (parseDatumCbor uses this for CBOR maps)
+  if (Object.prototype.hasOwnProperty.call(data, "map")) {
+    const m = new Map<Data, Data>();
+    for (const { k, v } of data.map as { k: any; v: any }[]) {
+      m.set(toMeshData(k), toMeshData(v));
+    }
+    return m as Data;
+  }
+  if (Object.prototype.hasOwnProperty.call(data, "constructor")) {
+    return {
+      // getAlternative() returns a BigInt; convert to number for comparison
+      alternative: Number(data.constructor),
+      fields: (data.fields as any[]).map(toMeshData),
+    } as Data;
+  }
+  return data as Data;
 }
 
 // based on Blockfrost's openAPI
@@ -116,14 +122,14 @@ export type asset_transactions = Array<{
    * Block creation time in UNIX time
    */
   block_time: number;
-  }>;
-  
-  export type output = {
-    /**
-     * Output address
-     */
-    address: string;
-    amount: Array<{
+}>;
+
+export type output = {
+  /**
+   * Output address
+   */
+  address: string;
+  amount: Array<{
     /**
      * The unit of the value
      */
@@ -132,26 +138,25 @@ export type asset_transactions = Array<{
      * The quantity of the unit
      */
     quantity: string;
-    }>;
-    /**
-     * UTXO index in the transaction
-     */
-    output_index: number;
-    /**
-     * The hash of the transaction output datum
-     */
-    data_hash: string | null;
-    /**
-     * CBOR encoded inline datum
-     */
-    inline_datum: string | null;
-    /**
-     * Whether the output is a collateral output
-     */
-    collateral: boolean;
-    /**
-     * The hash of the reference script of the output
-     */
-    reference_script_hash: string | null;
-    };
-  
+  }>;
+  /**
+   * UTXO index in the transaction
+   */
+  output_index: number;
+  /**
+   * The hash of the transaction output datum
+   */
+  data_hash: string | null;
+  /**
+   * CBOR encoded inline datum
+   */
+  inline_datum: string | null;
+  /**
+   * Whether the output is a collateral output
+   */
+  collateral: boolean;
+  /**
+   * The hash of the reference script of the output
+   */
+  reference_script_hash: string | null;
+};

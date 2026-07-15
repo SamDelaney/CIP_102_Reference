@@ -1,22 +1,27 @@
-import { load } from "https://deno.land/std@0.208.0/dotenv/mod.ts";
-import { writeFileSync } from "https://deno.land/std@0.110.0/node/fs.ts";
-
-const env = await load({ allowEmptyValues: true });
+import "dotenv/config";
+import dotenv from "dotenv";
+import { writeFileSync } from "fs";
+import dotenvParseVariables from "dotenv-parse-variables";
 
 export function getEnv(variable: string): string {
-	const value = env[variable];
-	if (!value) {
-		throw Error(
-			`Must set ${variable} is a required environment variable. Did you use 'pnpm run .env <task>'?`
-		);
-	}
+  const value = process.env[variable];
+  if (!value) {
+    throw Error(
+      `Must set ${variable} is a required environment variable. Did you use 'pnpm run .env <task>'?`
+    );
+  }
 
-	return value;
+  return value;
 }
 
-export function updateEnv(config = {}, eol = '\n'){
-  const envContents = Object.entries({...env, ...config})
-    .map(([key,val]) => `${key}=${val}`)
-    .join(eol)
-  writeFileSync('.env', envContents);
+export function updateEnv(config = {}, eol = "\n") {
+  let env = dotenv.config({});
+  if (env.error) throw env.error;
+  env = dotenvParseVariables(env.parsed);
+
+  const envContents = Object.entries({ ...env, ...config })
+    .map(([key, val]) => `${key}=${val}`)
+    .join(eol);
+
+  writeFileSync(".env", envContents);
 }

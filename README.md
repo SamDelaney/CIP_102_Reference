@@ -1,6 +1,6 @@
 # The Official CIP 102 Reference Implementation
 
-A reference implementation for [CIP-0102](https://cips.cardano.org/cip/CIP-0102) royalties, written in Lucid (offchain) and Aiken (onchain).
+A reference implementation for [CIP-0102](https://cips.cardano.org/cip/CIP-0102) royalties, written in Mesh (offchain) and Aiken (onchain).
 
 In this reference implementation you'll find examples of:
 
@@ -15,7 +15,7 @@ In this reference implementation you'll find examples of:
 
 This repository is divided into two parts: offchain (transaction building) & onchain (transaction validation).
 
-The `offchain-reference` subdirectory is written in Typescript, making heavy use of the [Lucid](https://github.com/spacebudz/lucid) offchain transaction building library.
+The `offchain-reference` subdirectory is written in Typescript, making heavy use of the [Mesh](https://meshjs.dev/) offchain transaction building library.
 
 The `onchain-reference` subdirectory is written in [Aiken](https://aiken-lang.org/), a Cardano-specific onchain transaction validation language.
 
