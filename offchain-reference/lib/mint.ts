@@ -18,13 +18,12 @@ function datumToCbor(datum: Data): string {
   return toPlutusData(datum).toCbor().toString();
 }
 
-/// Pick the best collateral UTxO: a pure-ADA UTxO, falling back to the first.
+/// Pick the best collateral UTxO: a pure-ADA UTxO only.
+/// Returns undefined if none is available — callers must handle this.
 function pickCollateral(utxos: UTxO[]): UTxO | undefined {
-  return (
-    utxos.find(
-      (u) =>
-        u.output.amount.length === 1 && u.output.amount[0]?.unit === "lovelace",
-    ) ?? utxos[0]
+  return utxos.find(
+    (u) =>
+      u.output.amount.length === 1 && u.output.amount[0]?.unit === "lovelace",
   );
 }
 
@@ -124,14 +123,19 @@ export async function createRoyalty(
     .changeAddress(walletAddress);
 
   const col = pickCollateral(utxos);
-  if (col) {
-    txBuilder.txInCollateral(
-      col.input.txHash,
-      col.input.outputIndex,
-      col.output.amount,
-      col.output.address,
-    );
+  if (!col) {
+    return {
+      error:
+        "no-pure-ada-collateral: wallet has no UTxO containing only ADA. " +
+        "Send a small amount of ADA to your wallet address to create a pure-ADA UTxO for use as collateral. (try npm run set-collateral)",
+    };
   }
+  txBuilder.txInCollateral(
+    col.input.txHash,
+    col.input.outputIndex,
+    col.output.amount,
+    col.output.address,
+  );
 
   return { tx: txBuilder, policyId };
 }
@@ -229,14 +233,19 @@ export async function mintNFTs(
     .changeAddress(walletAddress);
 
   const col = pickCollateral(utxos);
-  if (col) {
-    txBuilder.txInCollateral(
-      col.input.txHash,
-      col.input.outputIndex,
-      col.output.amount,
-      col.output.address,
-    );
+  if (!col) {
+    return {
+      error:
+        "no-pure-ada-collateral: wallet has no UTxO containing only ADA. " +
+        "Send a small amount of ADA to your wallet address to create a pure-ADA UTxO for use as collateral. (try npm run set-collateral)",
+    };
   }
+  txBuilder.txInCollateral(
+    col.input.txHash,
+    col.input.outputIndex,
+    col.output.amount,
+    col.output.address,
+  );
 
   console.log("walletAddress: ", walletAddress);
   return { tx: txBuilder, policyId };

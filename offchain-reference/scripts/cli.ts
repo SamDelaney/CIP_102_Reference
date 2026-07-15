@@ -18,6 +18,9 @@ import { createTimelockedMP, mintNFTs } from "../lib/mint.js";
 import type { MediaAssets, Royalty, TxBuild } from "../lib/common/index.js";
 import { BlockfrostProvider } from "@meshsdk/provider";
 import type { PlutusScript } from "@meshsdk/common";
+// See set-collateral.ts for why we await the *nested* sodium instance.
+// @ts-ignore – nested package has no .d.ts; types come from @types/libsodium-wrappers-sumo
+import internalSodium from "../node_modules/@meshsdk/core-cst/node_modules/libsodium-wrappers-sumo/dist/modules-sumo/libsodium-wrappers.js";
 import {
   applyParamsToScript,
   resolvePlutusScriptAddress,
@@ -41,6 +44,7 @@ import { bech32 } from "bech32";
 import { getEnv } from "./env.js";
 import { extractRoyaltyInfo } from "../lib/read.js";
 import { writeFileSync, readFileSync } from "fs";
+import { createInterface } from "node:readline";
 
 const contracts = JSON.parse(
   readFileSync(
@@ -109,6 +113,8 @@ const cardanoNetwork = getEnv("PUBLIC_CARDANO_NETWORK");
 const walletAddress = getEnv("WALLET_ADDRESS");
 const privateKey = getEnv("WALLET_PRIVATE_KEY");
 const networkId = cardanoNetwork === "mainnet" ? 1 : 0;
+
+await internalSodium.ready;
 
 const provider = new BlockfrostProvider(projectId);
 
@@ -247,6 +253,12 @@ async function runTx(txBuilder: () => Promise<TxBuild>): Promise<unknown> {
   const unsignedTxHex = await txBuild.tx.complete();
   const patchedTxHex = await patchScriptDataHash(provider, unsignedTxHex);
 
+  const confirmed = await confirm("Submit transaction? [y/N] ");
+  if (!confirmed) {
+    console.log("Aborted.");
+    process.exit(0);
+  }
+
   const keyBytes = Buffer.from(
     bech32.fromWords(bech32.decode(privateKey, 1000).words),
   );
@@ -265,6 +277,16 @@ async function runTx(txBuilder: () => Promise<TxBuild>): Promise<unknown> {
   writeFileSync("signed-tx.cbor", signedCbor);
   console.log("signed CBOR written to signed-tx.cbor");
   return provider.submitTx(signedCbor);
+}
+
+function confirm(prompt: string): Promise<boolean> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(prompt, (answer) => {
+      rl.close();
+      resolve(answer.trim().toLowerCase() === "y");
+    });
+  });
 }
 
 async function patchScriptDataHash(

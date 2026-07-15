@@ -73,7 +73,7 @@ npm run cli get-royalties c0c70f8c897376e09e1b7cdf551e86f1e4a7f5735539e41b089b3c
 Mint a timelocked CIP-68 NFT collection with a CIP-102 royalty. All required parameters are passed as flags:
 
 ```bash
-npm run cli -- mint-collection \
+npm run cli -- -- mint-collection \
   --name <base-name> \
   --image <ipfs-url> \
   --deadline <ISO-date> \
@@ -91,12 +91,12 @@ npm run cli -- mint-collection \
 | `--size`            | Number of NFTs to mint                                              | No (default: `1`)              |
 | `--royalty-address` | Royalty recipient address                                           | No (default: `WALLET_ADDRESS`) |
 
-> **Note:** flags that begin with `--` must be separated from `npm run cli` by a `--` argument so npm doesn't intercept them. Positional arguments (like the policy ID for `get-royalties`) can be passed directly without `--`.
+> **Note:** Use `npm run cli -- --` (two `--` separators) before the subcommand when passing flags. The first `--` tells npm to stop processing its own options; the second `--` is passed to the script to signal end of positional arguments. This prevents npm from intercepting flags like `--name` (a reserved npm config key) or warning about unknown ones. Positional arguments (like the policy ID for `get-royalties`) can be passed directly with just one `--`.
 
 Example:
 
 ```bash
-npm run cli -- mint-collection \
+npm run cli -- -- mint-collection \
   --name "myNFT" \
   --image "ipfs://QmeTkA5bY4P3DUjhdtPc2MsT8G8keb7HAxjccKrLJN2xTz" \
   --deadline "2027-12-22T23:59:59Z" \
@@ -107,7 +107,7 @@ npm run cli -- mint-collection \
 To view all available options:
 
 ```bash
-npm run cli -- --help
+npm run cli -- -- --help
 ```
 
 ### Mock Frontend (legacy)
