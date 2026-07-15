@@ -110,6 +110,22 @@ export async function createRoyalty(
     evaluator: provider,
   });
 
+  const col = pickCollateral(utxos);
+  if (!col) {
+    return {
+      error:
+        "no-pure-ada-collateral: wallet has no UTxO containing only ADA. " +
+        "Send a small amount of ADA to your wallet address to create a pure-ADA UTxO for use as collateral. (try npm run set-collateral)",
+    };
+  }
+
+  // Exclude collateral from coin selection so it isn't spent as a regular input.
+  const spendableUtxos = utxos.filter(
+    (u) =>
+      u.input.txHash !== col.input.txHash ||
+      u.input.outputIndex !== col.input.outputIndex,
+  );
+
   txBuilder
     .mintPlutusScriptV2()
     .mint("1", policyId, CIP68_LABEL[500] + utf8ToHex("Royalty"))
@@ -119,17 +135,9 @@ export async function createRoyalty(
     .txOutInlineDatumValue(datumToCbor(royaltyDatum), "CBOR")
     .requiredSignerHash(paymentKeyHash)
     .invalidHereafter(validToSlot)
-    .selectUtxosFrom(utxos)
+    .selectUtxosFrom(spendableUtxos)
     .changeAddress(walletAddress);
 
-  const col = pickCollateral(utxos);
-  if (!col) {
-    return {
-      error:
-        "no-pure-ada-collateral: wallet has no UTxO containing only ADA. " +
-        "Send a small amount of ADA to your wallet address to create a pure-ADA UTxO for use as collateral. (try npm run set-collateral)",
-    };
-  }
   txBuilder.txInCollateral(
     col.input.txHash,
     col.input.outputIndex,
@@ -150,6 +158,7 @@ export async function mintNFTs(
   validator: PlutusScript,
   sanitizedMetadataAssets: MediaAssets,
   cip102?: "NoRoyalty" | "Premade" | Royalty,
+  refAddress?: string,
 ): Promise<TxBuild> {
   const royalty =
     cip102 === "NoRoyalty" || cip102 === "Premade" ? undefined : cip102;
@@ -157,13 +166,30 @@ export async function mintNFTs(
   const utxos = await provider.fetchAddressUTxOs(walletAddress);
   if (!utxos.length) return { error: "empty-wallet" };
 
+  const col = pickCollateral(utxos);
+  if (!col) {
+    return {
+      error:
+        "no-pure-ada-collateral: wallet has no UTxO containing only ADA. " +
+        "Send a small amount of ADA to your wallet address to create a pure-ADA UTxO for use as collateral. (try npm run set-collateral)",
+    };
+  }
+
+  // Exclude collateral from coin selection so it isn't spent as a regular input.
+  const spendableUtxos = utxos.filter(
+    (u) =>
+      u.input.txHash !== col.input.txHash ||
+      u.input.outputIndex !== col.input.outputIndex,
+  );
+
   const validToMs = Date.now() + 3_600_000; // +1 hour
   const validToSlot = await msToSlot(provider, validToMs);
 
   const policyId = resolvePlutusScriptHash(
     resolvePlutusScriptAddress(policy, networkId),
   );
-  const validatorAddress = resolvePlutusScriptAddress(validator, networkId);
+  const validatorAddress =
+    refAddress ?? resolvePlutusScriptAddress(validator, networkId);
   const paymentKeyHash = resolvePaymentKeyHash(walletAddress);
   const tokenNames = Object.keys(sanitizedMetadataAssets);
   const has102Royalty = cip102 === "Premade" || royalty !== undefined;
@@ -229,17 +255,9 @@ export async function mintNFTs(
   txBuilder
     .requiredSignerHash(paymentKeyHash)
     .invalidHereafter(validToSlot)
-    .selectUtxosFrom(utxos)
+    .selectUtxosFrom(spendableUtxos)
     .changeAddress(walletAddress);
 
-  const col = pickCollateral(utxos);
-  if (!col) {
-    return {
-      error:
-        "no-pure-ada-collateral: wallet has no UTxO containing only ADA. " +
-        "Send a small amount of ADA to your wallet address to create a pure-ADA UTxO for use as collateral. (try npm run set-collateral)",
-    };
-  }
   txBuilder.txInCollateral(
     col.input.txHash,
     col.input.outputIndex,

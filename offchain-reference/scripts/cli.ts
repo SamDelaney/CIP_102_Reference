@@ -23,8 +23,7 @@ import type { PlutusScript } from "@meshsdk/common";
 import internalSodium from "../node_modules/@meshsdk/core-cst/node_modules/libsodium-wrappers-sumo/dist/modules-sumo/libsodium-wrappers.js";
 import {
   applyParamsToScript,
-  resolvePlutusScriptAddress,
-  resolvePlutusScriptHash,
+  resolvePaymentKeyHash,
   VkeyWitness,
   HexBlob,
   resolveTxHash,
@@ -70,6 +69,8 @@ mint-collection options:
   --size <number>              Number of NFTs to mint                 [default: 1]
   --fee <percent>              Royalty fee percentage (e.g. 1.6)      [required]
   --royalty-address <address>  Royalty recipient address  [default: WALLET_ADDRESS]
+  --ref-address <address>      Address to send reference (100) tokens to
+                               [default: alwaysFails script parameterized by PKH]
 
 get-royalties options:
   --policy-id <id>             Policy ID to query royalties for       [required]
@@ -92,6 +93,7 @@ const { values, positionals } = parseArgs({
     size: { type: "string" },
     fee: { type: "string" },
     "royalty-address": { type: "string" },
+    "ref-address": { type: "string" },
     // get-royalties
     "policy-id": { type: "string" },
     // global
@@ -184,6 +186,7 @@ async function runMintCollection(): Promise<unknown> {
   const size = values.size !== undefined ? parseInt(values.size, 10) : 1;
   const fee = parseFloat(values.fee!);
   const royaltyAddress = values["royalty-address"] ?? walletAddress;
+  const refAddress = values["ref-address"];
 
   if (isNaN(deadline.getTime())) {
     console.error(
@@ -200,10 +203,8 @@ async function runMintCollection(): Promise<unknown> {
     process.exit(1);
   }
 
-  const validatorScriptHash = resolvePlutusScriptHash(
-    resolvePlutusScriptAddress(timelockedMP, networkId),
-  );
-  const validator = alwaysFails(validatorScriptHash);
+  const paymentKeyHash = resolvePaymentKeyHash(walletAddress);
+  const validator = alwaysFails(paymentKeyHash);
   const parameterizedMp = createTimelockedMP(
     timelockedMP.code,
     deadline.getTime(),
@@ -225,6 +226,7 @@ async function runMintCollection(): Promise<unknown> {
       validator,
       assets,
       royalty,
+      refAddress,
     ),
   );
 }

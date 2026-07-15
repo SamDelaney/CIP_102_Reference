@@ -79,17 +79,19 @@ npm run cli -- -- mint-collection \
   --deadline <ISO-date> \
   --fee <percent> \
   [--size <count>] \
-  [--royalty-address <address>]
+  [--royalty-address <address>] \
+  [--ref-address <address>]
 ```
 
-| Flag                | Description                                                         | Required                       |
-| ------------------- | ------------------------------------------------------------------- | ------------------------------ |
-| `--name`            | Base name for the NFT assets (e.g. `myNFT` → `myNFT0`, `myNFT1`, …) | Yes                            |
-| `--image`           | IPFS URL for the NFT image                                          | Yes                            |
-| `--deadline`        | Minting deadline in ISO 8601 format (e.g. `2027-12-22T23:59:59Z`)   | Yes                            |
-| `--fee`             | Royalty fee as a percentage (e.g. `1.6` for 1.6%)                   | Yes                            |
-| `--size`            | Number of NFTs to mint                                              | No (default: `1`)              |
-| `--royalty-address` | Royalty recipient address                                           | No (default: `WALLET_ADDRESS`) |
+| Flag                | Description                                                                  | Required                                                                  |
+| ------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `--name`            | Base name for the NFT assets (e.g. `myNFT` → `myNFT0`, `myNFT1`, …)          | Yes                                                                       |
+| `--image`           | IPFS URL for the NFT image                                                   | Yes                                                                       |
+| `--deadline`        | Minting deadline in ISO 8601 format (e.g. `2027-12-22T23:59:59Z`)            | Yes                                                                       |
+| `--fee`             | Royalty fee as a percentage (e.g. `1.6` for 1.6%)                            | Yes                                                                       |
+| `--size`            | Number of NFTs to mint                                                       | No (default: `1`)                                                         |
+| `--royalty-address` | Royalty recipient address                                                    | No (default: `WALLET_ADDRESS`)                                            |
+| `--ref-address`     | Address to send CIP-68 reference (100) tokens and the royalty (500) token to | No (default: `alwaysFails` script parameterized by your payment key hash) |
 
 > **Note:** Use `npm run cli -- --` (two `--` separators) before the subcommand when passing flags. The first `--` tells npm to stop processing its own options; the second `--` is passed to the script to signal end of positional arguments. This prevents npm from intercepting flags like `--name` (a reserved npm config key) or warning about unknown ones. Positional arguments (like the policy ID for `get-royalties`) can be passed directly with just one `--`.
 
@@ -104,6 +106,10 @@ npm run cli -- -- mint-collection \
   --fee 1.6
 ```
 
+The CLI will prompt for confirmation before submitting the transaction. Type `y` to proceed or anything else to abort.
+
+> **Collateral:** Plutus transactions require a pure-ADA UTxO as collateral. If your wallet only has UTxOs that contain native tokens, the command will fail with a clear error. Run `npm run set-collateral` first to create a suitable collateral UTxO (see [Setting Up Collateral](#setting-up-collateral) below).
+
 To view all available options:
 
 ```bash
@@ -113,6 +119,28 @@ npm run cli -- -- --help
 ### Mock Frontend (legacy)
 
 The mock frontend (`scripts/mock-frontend.ts`) is the original script-based interface. Parameters for `mint-collection` are set as hardcoded constants at the top of the `testTimelockedMint` function rather than via CLI flags.
+
+### Setting Up Collateral
+
+Cardano Plutus transactions require a dedicated pure-ADA UTxO as collateral (a UTxO that holds only lovelace, no native tokens). If all your UTxOs contain NFTs or other tokens, minting will fail.
+
+Run the following command to send a small amount of ADA from your wallet to itself, creating a fresh pure-ADA UTxO:
+
+```bash
+# Default: reserves 5 ADA
+npm run set-collateral
+
+# Custom amount
+npm run set-collateral -- -- --amount 10
+```
+
+The script will:
+
+1. Check whether a suitable collateral UTxO already exists and warn you if so
+2. Prompt for confirmation before submitting
+3. Send the specified ADA to your own address
+
+Once confirmed, the collateral UTxO is automatically preserved during subsequent minting transactions — the coin selector will never spend it.
 
 ## Migration Notes
 
@@ -128,6 +156,7 @@ This project has been migrated from Deno to Node.js. Key changes include:
 
 - `npm run generate-wallet` - Generate a new wallet for testing
 - `npm run print-utxos` - Print UTXOs in the connected wallet
+- `npm run set-collateral [-- -- --amount <ADA>]` - Create a pure-ADA collateral UTxO
 - `npm run cli <command> [options]` - CLI interface (recommended)
 - `npm run mock-frontend [action]` - Legacy mock frontend
 - `npm test` - Run tests
