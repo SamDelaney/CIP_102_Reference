@@ -33,7 +33,6 @@ import cbor from "cbor";
 let costModelsSynced = false;
 async function syncLiveCostModels(provider: BlockfrostProvider): Promise<void> {
   if (costModelsSynced) return;
-  costModelsSynced = true;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data } = await (provider as any)._axiosInstance.get(
@@ -43,6 +42,10 @@ async function syncLiveCostModels(provider: BlockfrostProvider): Promise<void> {
     | Record<string, number[] | Record<string, number>>
     | undefined;
   if (!rawModels) return;
+
+  // Only mark as synced once the live models have actually been fetched and
+  // patched in. A failed request (transient outage) leaves the flag unset so a
+  // later call retries rather than proceeding with stale Mesh defaults.
 
   const toList = (
     v: number[] | Record<string, number> | undefined,
@@ -59,6 +62,8 @@ async function syncLiveCostModels(provider: BlockfrostProvider): Promise<void> {
   patch(DEFAULT_V1_COST_MODEL_LIST, toList(rawModels["PlutusV1"]));
   patch(DEFAULT_V2_COST_MODEL_LIST, toList(rawModels["PlutusV2"]));
   patch(DEFAULT_V3_COST_MODEL_LIST, toList(rawModels["PlutusV3"]));
+
+  costModelsSynced = true;
 }
 
 /// cardano-sdk's input-selection library (used internally by

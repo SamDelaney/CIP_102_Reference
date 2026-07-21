@@ -4,7 +4,6 @@ use aiken/dict.{Dict}
 use aiken/hash.{Blake2b_224, Blake2b_256, Hash}
 use aiken/int
 use aiken/list
-use aiken/option
 use aiken/string
 use aiken/transaction.{Datum, DatumHash, InlineDatum, Input, NoDatum}
 use aiken/transaction/credential.{Address, VerificationKey}
@@ -91,8 +90,10 @@ pub fn construct_royalty_tn(postfix: Option<Int>) -> ByteArray {
 }
 
 // Reads the `royalty_included` selector out of a CIP-68 reference datum's
-// `extra` field, if present. Returns `None` when the key is absent or its
-// value can't be parsed as an integer (v1-compatible / optional discovery).
+// `extra` field. Returns `None` only when the key is *absent* (v1-compatible /
+// optional discovery). A key that is present but whose value can't be parsed
+// as an integer is malformed and fails closed rather than being silently
+// treated as absent, which would bypass v2 enforcement.
 pub fn parse_royalty_included(extra: Metadata) -> Option<Int> {
   when list.find(extra, fn(item) { item.1st == royalty_included_key }) is {
     None -> None
@@ -104,9 +105,11 @@ pub fn parse_royalty_included(extra: Metadata) -> Option<Int> {
         }
         DByteArray -> {
           expect parsed_ba: ByteArray = item.2nd
-          int.from_utf8(parsed_ba)
+          expect Some(parsed_int) = int.from_utf8(parsed_ba)
+          Some(parsed_int)
         }
-        _ -> None
+        // Present with a non-integer data type: malformed, fail closed.
+        _ -> fail
       }
   }
 }
@@ -125,81 +128,99 @@ pub fn get_data(
   }
 }
 
+// Finds the reference input holding exactly one of the given royalty token and
+// returns its datum's recipients. When `required` is False (v1 base token,
+// optional) a missing token yields an empty recipient list; when True (v2
+// postfixed token) a missing token fails closed.
+fn find_royalty_recipients(
+  asset: Asset,
+  reference_inputs: List<Input>,
+  datums: Dict<Hash<Blake2b_256, Data>, Data>,
+  royalty_asset_name: AssetName,
+  required: Bool,
+) -> List<RoyaltyRecipient> {
+  when
+    list.find(
+      reference_inputs,
+      fn(input) {
+        value.quantity_of(
+          input.output.value,
+          asset.policy_id,
+          royalty_asset_name,
+        ) == 1
+      },
+    )
+  is {
+    Some(royalty_input) -> {
+      expect royalty_info: RoyaltyDatum =
+        get_data(datums, royalty_input.output.datum)
+      royalty_info.recipients
+    }
+    None ->
+      if required {
+        fail
+      } else {
+        []
+      }
+  }
+}
+
 pub fn get_recipients(
   asset: Asset,
   reference_inputs: List<Input>,
   datums: Dict<Hash<Blake2b_256, Data>, Data>,
 ) -> List<RoyaltyRecipient> {
-  // v1 fast path: a base (500)Royalty reference input, if present, always
-  // applies regardless of the asset being transacted (single-policy model).
-  let royalty_input =
-    list.find(
-      reference_inputs,
-      fn(input) {
-        value.quantity_of(input.output.value, asset.policy_id, royalty_tn) == 1
-      },
-    )
+  // For a CIP-68 user token, the NFT's reference datum authoritatively selects
+  // which royalty token (if any) applies. This must be consulted *before*
+  // choosing a royalty token, so that a v2 selector can't be satisfied by the
+  // base (500)Royalty token (and selector = 0 requires no royalty at all).
+  if bytearray.take(asset.asset_name, 8) == user_tn_prefix {
+    // calculate the reference token asset name and locate its input
+    let ref_tn = get_ref_tn(asset.asset_name)
+    expect Some(ref_token_input) =
+      list.find(
+        reference_inputs,
+        fn(input) {
+          value.quantity_of(input.output.value, asset.policy_id, ref_tn) == 1
+        },
+      )
+    expect reference_datum: RefDatumMetadata =
+      get_data(datums, ref_token_input.output.datum)
 
-  if option.is_some(royalty_input) {
-    // Get Royalty Datum
-    expect Some(found_royalty_input) = royalty_input
-    expect royalty_info: RoyaltyDatum =
-      get_data(datums, found_royalty_input.output.datum)
-    // If found, get recipients
-    royalty_info.recipients
-  } else {
-    // If not found, check if the asset is a CIP-68 user token
-    if bytearray.take(asset.asset_name, 8) == user_tn_prefix {
-      // if so, calculate reference token asset name
-      let ref_tn = get_ref_tn(asset.asset_name)
-
-      // look for an input with a reference token
-      expect Some(ref_token_input) =
-        list.find(
+    // CIP-102 v2: check for a royalty_included selector.
+    when parse_royalty_included(reference_datum.extra) is {
+      // Field absent: v1-compatible. The base (500)Royalty token is accepted
+      // but not required.
+      None ->
+        find_royalty_recipients(
+          asset,
           reference_inputs,
-          fn(input) {
-            value.quantity_of(input.output.value, asset.policy_id, ref_tn) == 1
-          },
+          datums,
+          royalty_tn,
+          False,
         )
-      // parse the reference datum
-      expect reference_datum: RefDatumMetadata =
-        get_data(datums, ref_token_input.output.datum)
-
-      // CIP-102 v2: check for a royalty_included selector.
-      when parse_royalty_included(reference_datum.extra) is {
-        // Field absent: v1-compatible, optional. Base token already checked
-        // above and wasn't found, so there's nothing to require.
-        None -> []
-        Some(postfix) ->
-          if postfix == 0 {
-            // Explicitly no royalty required: don't search for one.
-            []
-          } else if postfix > 0 {
-            // Require the matching postfixed royalty token.
-            let required_tn = construct_royalty_tn(Some(postfix))
-            expect Some(postfixed_input) =
-              list.find(
-                reference_inputs,
-                fn(input) {
-                  value.quantity_of(
-                    input.output.value,
-                    asset.policy_id,
-                    required_tn,
-                  ) == 1
-                },
-              )
-            expect royalty_info: RoyaltyDatum =
-              get_data(datums, postfixed_input.output.datum)
-            royalty_info.recipients
-          } else {
-            // Negative / malformed selector: fail safe.
-            fail
-          }
-      }
-    } else {
-      // if the asset is not a CIP 68 NFT, return an empty list
-      []
+      Some(postfix) ->
+        if postfix == 0 {
+          // Explicitly no royalty required: don't search for one.
+          []
+        } else if postfix > 0 {
+          // Require exactly the matching postfixed royalty token.
+          find_royalty_recipients(
+            asset,
+            reference_inputs,
+            datums,
+            construct_royalty_tn(Some(postfix)),
+            True,
+          )
+        } else {
+          // Negative / malformed selector: fail safe.
+          fail
+        }
     }
+  } else {
+    // Not a CIP-68 user token: single-policy v1 model. The base (500)Royalty
+    // token, if present, applies but is not required.
+    find_royalty_recipients(asset, reference_inputs, datums, royalty_tn, False)
   }
 }
 

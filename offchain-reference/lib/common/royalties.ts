@@ -77,7 +77,18 @@ export function parseRoyaltyIncluded(extra: Data): number | undefined {
   if (!(extra instanceof Map)) return undefined;
   const value = (extra as Map<Data, Data>).get(ROYALTY_INCLUDED_KEY);
   if (value === undefined) return undefined;
-  return Number(value as bigint);
+  const included = value as bigint;
+  // Guard against silently losing precision when narrowing to a JS number,
+  // which would otherwise resolve to the wrong `(500)Royalty<n>` token.
+  if (
+    included > BigInt(Number.MAX_SAFE_INTEGER) ||
+    included < BigInt(Number.MIN_SAFE_INTEGER)
+  ) {
+    throw new Error(
+      `royalty_included ${included} is outside the safe integer range`,
+    );
+  }
+  return Number(included);
 }
 
 /// Returns an asset unit for a CIP-68 token

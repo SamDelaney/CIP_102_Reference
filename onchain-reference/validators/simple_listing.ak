@@ -16,7 +16,7 @@ use onchain_reference/common.{
 }
 use onchain_reference/listing_utils.{Payout}
 use onchain_reference/test_utils.{
-  placeholder_oref, placeholder_recipient, recipients_to_input,
+  placeholder_oref, placeholder_recipient, recipients_to_input, ref_token_input,
 }
 
 pub type ListingDatum {
@@ -271,6 +271,11 @@ fn get_base_transaction(
   let lot_input = lot_to_input(listing_datum)
   let royalty_policy_ref_input =
     recipients_to_input(royalty_recipients, mock_policy_id)
+  // The lot is a CIP-68 user token, so get_recipients reads its (100) reference
+  // datum to decide which royalty token applies. `None` selector => v1: the
+  // base (500)Royalty token is accepted but not required.
+  let lot_ref_token_input =
+    ref_token_input(mock_policy_id, "fake_lot_tn", None)
 
   let buyer_address =
     Address {
@@ -348,7 +353,7 @@ fn get_base_transaction(
     ..transaction.placeholder(),
     extra_signatories: [mock_buyer],
     inputs: [lot_input, buyer_input],
-    reference_inputs: [royalty_policy_ref_input],
+    reference_inputs: [royalty_policy_ref_input, lot_ref_token_input],
     outputs: list.concat([seller_output, ..royalty_outputs], [buyer_output]),
   }
 }

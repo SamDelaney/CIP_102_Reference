@@ -107,6 +107,22 @@ if (values.help || !command) {
   process.exit(0);
 }
 
+// Parses a CLI flag as a strictly positive integer. Rejects any non-digit input
+// (e.g. "1.5", "2e3", "-1", " 3") instead of silently truncating the way
+// parseInt would. Returns undefined when the flag was not supplied.
+function parsePositiveIntFlag(
+  raw: string | undefined,
+  command: string,
+  flag: string,
+): number | undefined {
+  if (raw === undefined) return undefined;
+  if (!/^[1-9][0-9]*$/.test(raw)) {
+    console.error(`${command}: ${flag} must be a positive integer`);
+    process.exit(1);
+  }
+  return parseInt(raw, 10);
+}
+
 // ── Environment ──────────────────────────────────────────────────────────────
 
 const projectId = getEnv("BLOCKFROST_PROJECT_KEY");
@@ -187,17 +203,11 @@ async function runMintCollection(): Promise<unknown> {
   const fee = parseFloat(values.fee!);
   const royaltyAddress = values["royalty-address"] ?? walletAddress;
   const refAddress = values["ref-address"];
-  const royaltyPostfixRaw = values["royalty-postfix"];
-  let royaltyPostfix: number | undefined;
-  if (royaltyPostfixRaw !== undefined) {
-    royaltyPostfix = parseInt(royaltyPostfixRaw, 10);
-    if (isNaN(royaltyPostfix) || royaltyPostfix <= 0) {
-      console.error(
-        `mint-collection: --royalty-postfix must be a positive integer`,
-      );
-      process.exit(1);
-    }
-  }
+  const royaltyPostfix = parsePositiveIntFlag(
+    values["royalty-postfix"],
+    "mint-collection",
+    "--royalty-postfix",
+  );
 
   if (isNaN(deadline.getTime())) {
     console.error(
@@ -253,17 +263,11 @@ async function runGetRoyalties(): Promise<unknown> {
     console.log(HELP);
     process.exit(1);
   }
-  const royaltyPostfixRaw = values["royalty-postfix"];
-  let royaltyPostfix: number | undefined;
-  if (royaltyPostfixRaw !== undefined) {
-    royaltyPostfix = parseInt(royaltyPostfixRaw, 10);
-    if (isNaN(royaltyPostfix) || royaltyPostfix <= 0) {
-      console.error(
-        `get-royalties: --royalty-postfix must be a positive integer`,
-      );
-      process.exit(1);
-    }
-  }
+  const royaltyPostfix = parsePositiveIntFlag(
+    values["royalty-postfix"],
+    "get-royalties",
+    "--royalty-postfix",
+  );
   return extractRoyaltyInfo(provider, policyId, networkId, royaltyPostfix);
 }
 
