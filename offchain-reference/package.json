@@ -31,6 +31,7 @@
     "@meshsdk/transaction": "^1.9.0-beta.102",
     "@meshsdk/wallet": "^1.9.0-beta.102",
     "@types/jest": "^29.5.14",
+    "cbor": "^10.0.9",
     "dotenv": "^16.5.0",
     "fs": "^0.0.1-security",
     "ts-node": "^10.9.2"

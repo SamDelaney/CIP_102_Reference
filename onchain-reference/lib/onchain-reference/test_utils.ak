@@ -1,3 +1,4 @@
+use aiken/bytearray
 use aiken/string
 use aiken/transaction.{InlineDatum, Input, Output, OutputReference}
 use aiken/transaction/credential.{
@@ -5,8 +6,9 @@ use aiken/transaction/credential.{
 }
 use aiken/transaction/value.{AssetName, PolicyId}
 use onchain_reference/common.{
-  RoyaltyDatum, RoyaltyRecipient, VerificationKeyHash, royalty_tn,
-  to_from_per_mille_fee,
+  Metadata, RefDatumMetadata, RoyaltyDatum, RoyaltyRecipient,
+  VerificationKeyHash, get_ref_tn, royalty_included_key, royalty_tn,
+  to_from_per_mille_fee, user_tn_prefix,
 }
 use onchain_reference/listing_utils.{Payout}
 
@@ -59,6 +61,74 @@ pub fn recipients_to_output(
     value: value.from_asset(policy_id, royalty_tn, 1),
     datum: InlineDatum(out_royalty_info),
     reference_script: None,
+  }
+}
+
+// CIP-102 v2: reconstruct a royalty Input/Output using an explicit asset name
+// (e.g. a postfixed `(500)Royalty<n>` token) and datum version.
+pub fn recipients_to_input_named(
+  recipients: List<RoyaltyRecipient>,
+  policy_id: PolicyId,
+  token_name: ByteArray,
+  version: Int,
+) -> Input {
+  Input {
+    output_reference: placeholder_oref(),
+    output: recipients_to_output_named(recipients, policy_id, token_name, version),
+  }
+}
+
+pub fn recipients_to_output_named(
+  recipients: List<RoyaltyRecipient>,
+  policy_id: PolicyId,
+  token_name: ByteArray,
+  version: Int,
+) -> Output {
+  let out_royalty_info = RoyaltyDatum { recipients, version, extra: None }
+
+  Output {
+    address: Address {
+      payment_credential: VerificationKeyCredential(""),
+      stake_credential: None,
+    },
+    value: value.from_asset(policy_id, token_name, 1),
+    datum: InlineDatum(out_royalty_info),
+    reference_script: None,
+  }
+}
+
+// CIP-102 v2: build a CIP-68 (100) reference-token Input carrying a
+// `royalty_included` selector in its `extra` field. `asset_payload` is the
+// asset-name suffix shared between the user and reference tokens (i.e. the
+// bytes after the CIP-67 label prefix).
+pub fn ref_token_input(
+  policy_id: PolicyId,
+  asset_payload: ByteArray,
+  royalty_included: Option<Int>,
+) -> Input {
+  let extra: Metadata =
+    when royalty_included is {
+      None -> []
+      Some(n) -> {
+        let value: Data = n
+        [Pair(royalty_included_key, value)]
+      }
+    }
+
+  let ref_datum = RefDatumMetadata { metadata: [], version: 1, extra }
+  let user_tn = bytearray.concat(user_tn_prefix, asset_payload)
+
+  Input {
+    output_reference: placeholder_oref(),
+    output: Output {
+      address: Address {
+        payment_credential: VerificationKeyCredential(""),
+        stake_credential: None,
+      },
+      value: value.from_asset(policy_id, get_ref_tn(user_tn), 1),
+      datum: InlineDatum(ref_datum),
+      reference_script: None,
+    },
   }
 }
 

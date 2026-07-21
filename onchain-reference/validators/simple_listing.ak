@@ -3,7 +3,7 @@ use aiken/list
 use aiken/math
 use aiken/option
 use aiken/transaction.{
-  InlineDatum, Input, NoDatum, Output, OutputReference, ScriptContext, Spend,
+  InlineDatum, Input, NoDatum, Output, OutputReference,
   Transaction,
 }
 use aiken/transaction/credential.{
@@ -19,7 +19,7 @@ use onchain_reference/test_utils.{
   placeholder_oref, placeholder_recipient, recipients_to_input,
 }
 
-type ListingDatum {
+pub type ListingDatum {
   // to further prevent circumvention, lot could be detected from consumed the Listing output
   lot: Asset,
   seller: VerificationKeyHash,
@@ -29,7 +29,7 @@ type ListingDatum {
 
 /// A user can either buy a token
 /// or cancel/update the listing.
-type ListingRedeemer {
+pub type ListingRedeemer {
   /// Make a purchase.
   Buy
   /// Cancel or update a listing.
@@ -40,22 +40,18 @@ validator listing_validator {
   /// Validate that the signer is the owner or that payouts
   /// are present as outputs and that the tag is correct.
   spend(
-    datum: ListingDatum,
+    datum_opt: Option<ListingDatum>,
     redeemer: ListingRedeemer,
     _utxo: Data,
     tx: Transaction,
   ) -> Bool {
+    expect Some(datum) = datum_opt
     let Transaction { outputs, extra_signatories, reference_inputs, datums, .. } =
       tx
-
-    let Transaction { outputs, extra_signatories, reference_inputs, datums, .. } =
-      transaction
 
     // Match on the action.
     when redeemer is {
       Buy -> {
-        expect Spend(_out_ref) = purpose
-
         let royalty_recipients: List<RoyaltyRecipient> =
           get_recipients(datum.lot, reference_inputs, datums)
 
@@ -199,14 +195,11 @@ test one_recipient_cip68_buy() {
   let royalty_recipients =
     [placeholder_recipient(80, mock_owner)]
 
-  let ctx =
-    ScriptContext {
-      transaction: get_base_transaction(listing_datum, royalty_recipients),
-      purpose: Spend(OutputReference { ..placeholder_oref(), output_index: 1 }),
-    }
+  let tx = get_base_transaction(listing_datum, royalty_recipients)
+  let utxo = OutputReference { ..placeholder_oref(), output_index: 1 }
 
   // 0 is the royalty input
-  spend(listing_datum, redeemer, ctx)
+  listing_validator.spend(Some(listing_datum), redeemer, utxo, tx)
 }
 
 test multi_recipient_cip68_buy() {
@@ -233,14 +226,11 @@ test multi_recipient_cip68_buy() {
       placeholder_recipient(200, "so_many_mock_owners"),
     ]
 
-  let ctx =
-    ScriptContext {
-      transaction: get_base_transaction(listing_datum, royalty_recipients),
-      purpose: Spend(OutputReference { ..placeholder_oref(), output_index: 1 }),
-    }
+  let tx = get_base_transaction(listing_datum, royalty_recipients)
+  let utxo = OutputReference { ..placeholder_oref(), output_index: 1 }
 
   // 0 is the royalty input
-  spend(listing_datum, redeemer, ctx)
+  listing_validator.spend(Some(listing_datum), redeemer, utxo, tx)
 }
 
 test no_royalty_paid() fail {
@@ -268,14 +258,10 @@ test no_royalty_paid() fail {
       outputs: get_base_transaction(listing_datum, []).outputs,
     }
 
-  let ctx =
-    ScriptContext {
-      transaction: tx,
-      purpose: Spend(OutputReference { ..placeholder_oref(), output_index: 1 }),
-    }
+  let utxo = OutputReference { ..placeholder_oref(), output_index: 1 }
 
   // 0 is the royalty input
-  spend(listing_datum, redeemer, ctx)
+  listing_validator.spend(Some(listing_datum), redeemer, utxo, tx)
 }
 
 fn get_base_transaction(

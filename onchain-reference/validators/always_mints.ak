@@ -5,8 +5,4 @@ validator always_mints(_key: ByteArray) {
   mint(_redeemer: Data, _policy_id: Data, _self: Data) {
     True
   }
-
-  burn(_redeemer: Data, _policy_id: Data, _self: Data) {
-    True
-  }
 }

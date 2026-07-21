@@ -19,9 +19,65 @@ export const CIP68_LABEL: Record<number, string> = {
 export const ROYALTY_TOKEN_LABEL = 500;
 export const ROYALTY_TOKEN_NAME = utf8ToHex("Royalty");
 
-/// Returns the asset unit for the royalty token: policyId + label500_prefix + hex("Royalty")
-export function toRoyaltyUnit(policyId: string): string {
-  return policyId + CIP68_LABEL[ROYALTY_TOKEN_LABEL] + ROYALTY_TOKEN_NAME;
+/// The Data map key used in a CIP-68 reference datum's `extra` field to select
+/// which postfixed CIP-102 v2 royalty token (if any) applies to that NFT.
+export const ROYALTY_INCLUDED_KEY: string = utf8ToHex("royalty_included");
+
+/// Validates a CIP-102 v2 royalty token postfix. Postfixes must be positive
+/// integers (0 is reserved for the `royalty_included` "no royalty" flag, not
+/// for a token name).
+function assertValidPostfix(postfix: number): void {
+  if (!Number.isInteger(postfix) || postfix <= 0) {
+    throw new Error(
+      `Royalty postfix must be a positive integer, got ${postfix}`,
+    );
+  }
+}
+
+/// Returns the hex-encoded royalty token asset name: hex("Royalty") optionally
+/// followed by the UTF-8 decimal digits of a postfix (CIP-102 v2).
+export function toRoyaltyAssetNameHex(postfix?: number): string {
+  if (postfix === undefined) return ROYALTY_TOKEN_NAME;
+  assertValidPostfix(postfix);
+  return ROYALTY_TOKEN_NAME + utf8ToHex(String(postfix));
+}
+
+/// Returns the asset unit for the royalty token: policyId + label500_prefix + hex("Royalty"[postfix])
+/// Omit `postfix` for the v1 base `(500)Royalty` token.
+export function toRoyaltyUnit(policyId: string, postfix?: number): string {
+  return (
+    policyId + CIP68_LABEL[ROYALTY_TOKEN_LABEL] + toRoyaltyAssetNameHex(postfix)
+  );
+}
+
+/// Builds the reference datum `extra` field value used to select a CIP-102 v2
+/// royalty policy for a single NFT.
+///  - `postfix` omitted  -> empty map (no `royalty_included` key): v1-compatible,
+///    optional discovery of the base `(500)Royalty` token.
+///  - `postfix` === 0    -> explicit "no royalty required" (validators must not
+///    search for a royalty input).
+///  - `postfix` > 0      -> require the matching `(500)Royalty<postfix>` token.
+export function toRoyaltyIncludedExtra(postfix?: number): Data {
+  const m = new Map<Data, Data>();
+  if (postfix !== undefined) {
+    if (!Number.isInteger(postfix) || postfix < 0) {
+      throw new Error(
+        `royalty_included must be a non-negative integer, got ${postfix}`,
+      );
+    }
+    m.set(ROYALTY_INCLUDED_KEY, BigInt(postfix));
+  }
+  return m as unknown as Data;
+}
+
+/// Reads the `royalty_included` selector back out of a parsed reference datum
+/// `extra` field (as normalised by `toMeshData`). Returns `undefined` when the
+/// key is absent (v1-compatible / optional).
+export function parseRoyaltyIncluded(extra: Data): number | undefined {
+  if (!(extra instanceof Map)) return undefined;
+  const value = (extra as Map<Data, Data>).get(ROYALTY_INCLUDED_KEY);
+  if (value === undefined) return undefined;
+  return Number(value as bigint);
 }
 
 /// Returns an asset unit for a CIP-68 token
@@ -68,7 +124,13 @@ export function asChainFixedFee(fee?: number): bigint | null {
 
 /// Converts the offchain royalty list into the Mesh Data object for CIP-102 on-chain datum.
 /// Returns a Mesh Data object ready to pass to txOutInlineDatumValue(..., "Mesh").
-export function toCip102RoyaltyDatum(royalties: Royalty[]): Data {
+///
+/// `version` should be `1n` (default) for a single base `(500)Royalty` token,
+/// or `2n` when the royalty token carries a CIP-102 v2 postfix.
+export function toCip102RoyaltyDatum(
+  royalties: Royalty[],
+  version: bigint = 1n,
+): Data {
   const recipients: Data[] = royalties.map((royalty) => {
     const address = asChainAddress(royalty.address);
     const fee = asChainVariableFee(royalty.fee);
@@ -90,6 +152,6 @@ export function toCip102RoyaltyDatum(royalties: Royalty[]): Data {
   // RoyaltyDatum = Constr(0, [recipients_list, version, extra_bytes])
   return {
     alternative: 0,
-    fields: [recipients, 1n, ""],
+    fields: [recipients, version, ""],
   };
 }
