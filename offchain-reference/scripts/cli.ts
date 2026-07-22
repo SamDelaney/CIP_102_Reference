@@ -30,13 +30,6 @@ import {
   deserializeTxHash,
   Ed25519PrivateKey,
   Ed25519PrivateExtendedKeyHex,
-  CostModel,
-  Costmdls,
-  Transaction,
-  TxCBOR,
-  CborWriter,
-  blake2b,
-  Hash32ByteBase16,
 } from "@meshsdk/core-cst";
 import { WalletStaticMethods } from "@meshsdk/wallet";
 import { bech32 } from "bech32";
@@ -71,10 +64,15 @@ mint-collection options:
   --royalty-address <address>  Royalty recipient address  [default: WALLET_ADDRESS]
   --ref-address <address>      Address to send reference (100) tokens to
                                [default: alwaysFails script parameterized by PKH]
+  --royalty-postfix <n>        CIP-102 v2 royalty token postfix (positive integer).
+                               Mints (500)Royalty<n> with datum version 2 instead
+                               of the v1 base (500)Royalty token.
 
 get-royalties options:
   --policy-id <id>             Policy ID to query royalties for       [required]
   (or pass the policy ID as a positional: get-royalties <policy-id>)
+  --royalty-postfix <n>        Look up the CIP-102 v2 (500)Royalty<n> token
+                               instead of the v1 base (500)Royalty token.
 
 Global options:
   --help, -h                   Show this help message
@@ -94,6 +92,7 @@ const { values, positionals } = parseArgs({
     fee: { type: "string" },
     "royalty-address": { type: "string" },
     "ref-address": { type: "string" },
+    "royalty-postfix": { type: "string" },
     // get-royalties
     "policy-id": { type: "string" },
     // global
@@ -106,6 +105,22 @@ const command = positionals[0];
 if (values.help || !command) {
   console.log(HELP);
   process.exit(0);
+}
+
+// Parses a CLI flag as a strictly positive integer. Rejects any non-digit input
+// (e.g. "1.5", "2e3", "-1", " 3") instead of silently truncating the way
+// parseInt would. Returns undefined when the flag was not supplied.
+function parsePositiveIntFlag(
+  raw: string | undefined,
+  command: string,
+  flag: string,
+): number | undefined {
+  if (raw === undefined) return undefined;
+  if (!/^[1-9][0-9]*$/.test(raw)) {
+    console.error(`${command}: ${flag} must be a positive integer`);
+    process.exit(1);
+  }
+  return parseInt(raw, 10);
 }
 
 // ── Environment ──────────────────────────────────────────────────────────────
@@ -123,19 +138,20 @@ const provider = new BlockfrostProvider(projectId);
 // ── Contract helpers ─────────────────────────────────────────────────────────
 
 const alwaysFails = (key: string): PlutusScript => ({
-  version: "V2",
+  version: "V3",
   code: applyParamsToScript(
-    contracts.validators.find((v: any) => v.title === "always_fails.spend")
-      ?.compiledCode ?? "",
+    contracts.validators.find(
+      (v: any) => v.title === "always_fails.always_fails.spend",
+    )?.compiledCode ?? "",
     [key],
   ),
 });
 
 const timelockedMP: PlutusScript = {
-  version: "V2",
+  version: "V3",
   code:
     contracts.validators.find(
-      (v: any) => v.title === "minting.minting_validator",
+      (v: any) => v.title === "minting.minting_validator.mint",
     )?.compiledCode ?? "",
 };
 
@@ -187,6 +203,11 @@ async function runMintCollection(): Promise<unknown> {
   const fee = parseFloat(values.fee!);
   const royaltyAddress = values["royalty-address"] ?? walletAddress;
   const refAddress = values["ref-address"];
+  const royaltyPostfix = parsePositiveIntFlag(
+    values["royalty-postfix"],
+    "mint-collection",
+    "--royalty-postfix",
+  );
 
   if (isNaN(deadline.getTime())) {
     console.error(
@@ -227,6 +248,7 @@ async function runMintCollection(): Promise<unknown> {
       assets,
       royalty,
       refAddress,
+      royaltyPostfix,
     ),
   );
 }
@@ -241,7 +263,12 @@ async function runGetRoyalties(): Promise<unknown> {
     console.log(HELP);
     process.exit(1);
   }
-  return extractRoyaltyInfo(provider, policyId, networkId);
+  const royaltyPostfix = parsePositiveIntFlag(
+    values["royalty-postfix"],
+    "get-royalties",
+    "--royalty-postfix",
+  );
+  return extractRoyaltyInfo(provider, policyId, networkId, royaltyPostfix);
 }
 
 // ── Shared tx utilities ──────────────────────────────────────────────────────
@@ -253,7 +280,6 @@ async function runTx(txBuilder: () => Promise<TxBuild>): Promise<unknown> {
   }
 
   const unsignedTxHex = await txBuild.tx.complete();
-  const patchedTxHex = await patchScriptDataHash(provider, unsignedTxHex);
 
   const confirmed = await confirm("Submit transaction? [y/N] ");
   if (!confirmed) {
@@ -267,12 +293,12 @@ async function runTx(txBuilder: () => Promise<TxBuild>): Promise<unknown> {
   const signer = Ed25519PrivateKey.fromExtendedHex(
     Ed25519PrivateExtendedKeyHex(keyBytes.toString("hex")),
   );
-  const txHash = deserializeTxHash(resolveTxHash(patchedTxHex));
+  const txHash = deserializeTxHash(resolveTxHash(unsignedTxHex));
   const witness = new VkeyWitness(
     signer.toPublic().hex(),
     signer.sign(HexBlob(txHash)).hex(),
   );
-  const signedCbor = WalletStaticMethods.addWitnessSets(patchedTxHex, [
+  const signedCbor = WalletStaticMethods.addWitnessSets(unsignedTxHex, [
     witness,
   ]).toString();
 
@@ -289,77 +315,4 @@ function confirm(prompt: string): Promise<boolean> {
       resolve(answer.trim().toLowerCase() === "y");
     });
   });
-}
-
-async function patchScriptDataHash(
-  provider: BlockfrostProvider,
-  txHex: string,
-): Promise<string> {
-  const tx = Transaction.fromCbor(TxCBOR(txHex));
-  const witnessSet = tx.witnessSet();
-  const redeemers = witnessSet.redeemers();
-
-  if (!redeemers || redeemers.size() === 0) return txHex;
-
-  const v1Scripts = witnessSet.plutusV1Scripts();
-  const v2Scripts = witnessSet.plutusV2Scripts();
-  const v3Scripts = witnessSet.plutusV3Scripts();
-  const hasV1 = v1Scripts != null && v1Scripts.size() > 0;
-  const hasV2 = v2Scripts != null && v2Scripts.size() > 0;
-  const hasV3 = v3Scripts != null && v3Scripts.size() > 0;
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (provider as any)._axiosInstance.get(
-    "epochs/latest/parameters",
-  );
-  const rawModels = data.cost_models_raw as
-    | Record<string, number[] | Record<string, number>>
-    | undefined;
-
-  if (!rawModels) {
-    console.warn("Blockfrost returned no cost_models_raw – using tx as-is");
-    return txHex;
-  }
-
-  console.log("cost_models_raw keys:", Object.keys(rawModels));
-
-  const toList = (
-    v: number[] | Record<string, number> | undefined,
-  ): number[] | undefined => {
-    if (!v) return undefined;
-    if (Array.isArray(v)) return v;
-    return Object.values(v);
-  };
-
-  const costModels = new Costmdls();
-  const v1List = toList(rawModels["PlutusV1"]);
-  const v2List = toList(rawModels["PlutusV2"]);
-  const v3List = toList(rawModels["PlutusV3"]);
-  if (hasV1 && v1List) costModels.insert(CostModel.newPlutusV1(v1List));
-  if (hasV2 && v2List) costModels.insert(CostModel.newPlutusV2(v2List));
-  if (hasV3 && v3List) costModels.insert(CostModel.newPlutusV3(v3List));
-
-  const datums = witnessSet.plutusData();
-  const EMPTY_MAP = new Uint8Array([0xa0]);
-  const writer = new CborWriter();
-
-  if (datums && datums.size() > 0 && redeemers.size() === 0) {
-    writer.writeEncodedValue(EMPTY_MAP);
-    writer.writeEncodedValue(Buffer.from(datums.toCbor(), "hex"));
-    writer.writeEncodedValue(EMPTY_MAP);
-  } else {
-    writer.writeEncodedValue(Buffer.from(redeemers.toCbor(), "hex"));
-    if (datums && datums.size() > 0) {
-      writer.writeEncodedValue(Buffer.from(datums.toCbor(), "hex"));
-    }
-    writer.writeEncodedValue(
-      Buffer.from(costModels.languageViewsEncoding(), "hex"),
-    );
-  }
-
-  const newHash = blake2b.hash(writer.encodeAsHex(), 32) as Hash32ByteBase16;
-  const body = tx.body();
-  body.setScriptDataHash(newHash);
-  tx.setBody(body);
-  return tx.toCbor().toString();
 }

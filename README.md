@@ -2,6 +2,8 @@
 
 A reference implementation for [CIP-0102](https://cips.cardano.org/cip/CIP-0102) royalties, written in Mesh (offchain) and Aiken (onchain).
 
+This implementation supports both CIP-102 v1 (a single base `(500)Royalty` token) and CIP-102 v2: optional positive-integer postfixes (e.g. `(500)Royalty2`).
+
 In this reference implementation you'll find examples of:
 
 - Minting a CIP 102 compliant NFT with royalties

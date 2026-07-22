@@ -1,11 +1,11 @@
 use aiken/interval.{Finite, Interval, IntervalBound}
 use aiken/list
 use aiken/time.{PosixTime}
-use aiken/transaction.{Mint, ScriptContext, Transaction}
+use aiken/transaction.{Transaction}
 use aiken/transaction/value
 use onchain_reference/common.{VerificationKeyHash}
 
-type Redeemer {
+pub type Redeemer {
   MintNft
   BurnNft
 }
@@ -54,56 +54,36 @@ const mock_asset_name = "some_fake_asset_name"
 test should_mint_nft() {
   let redeemer = MintNft
   // Happy path with 1 token minted
-  let ctx =
-    ScriptContext {
-      purpose: Mint(mock_policy_id),
-      transaction: get_base_transaction(1604063500000, 1704063500000, 1),
-    }
-  minting_validator(mock_timestamp, mock_owner, redeemer, ctx) == True
+  let tx = get_base_transaction(1604063500000, 1704063500000, 1)
+  minting_validator.mint(mock_timestamp, mock_owner, redeemer, mock_policy_id, tx) == True
 }
 
 test should_burn_nft() {
   let redeemer = BurnNft
   // Happy path with -1 tokens minted (1 token burned)
-  let ctx =
-    ScriptContext {
-      purpose: Mint(mock_policy_id),
-      transaction: get_base_transaction(1604063500000, 1704063500000, -1),
-    }
-  minting_validator(mock_timestamp, mock_owner, redeemer, ctx) == True
+  let tx = get_base_transaction(1604063500000, 1704063500000, -1)
+  minting_validator.mint(mock_timestamp, mock_owner, redeemer, mock_policy_id, tx) == True
 }
 
 test should_succeed_mint_multiple_asset_amount() {
   let redeemer = MintNft
   // Happy path with 5 tokens minted
-  let ctx =
-    ScriptContext {
-      purpose: Mint(mock_policy_id),
-      transaction: get_base_transaction(1604063500000, 1704063500000, 5),
-    }
-  minting_validator(mock_timestamp, mock_owner, redeemer, ctx) == True
+  let tx = get_base_transaction(1604063500000, 1704063500000, 5)
+  minting_validator.mint(mock_timestamp, mock_owner, redeemer, mock_policy_id, tx) == True
 }
 
 test should_throw_error_by_exceeded_time_lock() fail {
   let redeemer = MintNft
-  let ctx =
-    ScriptContext {
-      purpose: Mint(mock_policy_id),
-      transaction: get_base_transaction(1604063500000, mock_timestamp, 1),
-    }
+  let tx = get_base_transaction(1604063500000, mock_timestamp, 1)
   // parameterize with a posixtime before the end of the tx validity window
-  minting_validator(mock_timestamp - 5000, mock_owner, redeemer, ctx)
+  minting_validator.mint(mock_timestamp - 5000, mock_owner, redeemer, mock_policy_id, tx)
 }
 
 test should_throw_error_by_missing_signer() fail {
   let redeemer = MintNft
-  let ctx =
-    ScriptContext {
-      purpose: Mint(mock_policy_id),
-      transaction: get_base_transaction(1604063500000, 1704063500000, 1),
-    }
+  let tx = get_base_transaction(1604063500000, 1704063500000, 1)
   // Parameterize off of different vkh
-  minting_validator(mock_timestamp, "some_other_owner", redeemer, ctx)
+  minting_validator.mint(mock_timestamp, "some_other_owner", redeemer, mock_policy_id, tx)
 }
 
 fn get_base_transaction(from: Int, to: Int, quantity: Int) {

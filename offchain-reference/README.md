@@ -59,8 +59,10 @@ The CLI (`npm run cli`) is the recommended way to interact with the library from
 Query the royalty information for a given policy ID:
 
 ```bash
-npm run cli get-royalties <policyId>
+npm run cli get-royalties <policyId> [--royalty-postfix <n>]
 ```
+
+`--royalty-postfix <n>` (optional, positive integer) looks up the CIP-102 v2 `(500)Royalty<n>` token instead of the v1 base `(500)Royalty` token.
 
 Example:
 
@@ -80,18 +82,20 @@ npm run cli -- -- mint-collection \
   --fee <percent> \
   [--size <count>] \
   [--royalty-address <address>] \
-  [--ref-address <address>]
+  [--ref-address <address>] \
+  [--royalty-postfix <n>]
 ```
 
-| Flag                | Description                                                                  | Required                                                                  |
-| ------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `--name`            | Base name for the NFT assets (e.g. `myNFT` → `myNFT0`, `myNFT1`, …)          | Yes                                                                       |
-| `--image`           | IPFS URL for the NFT image                                                   | Yes                                                                       |
-| `--deadline`        | Minting deadline in ISO 8601 format (e.g. `2027-12-22T23:59:59Z`)            | Yes                                                                       |
-| `--fee`             | Royalty fee as a percentage (e.g. `1.6` for 1.6%)                            | Yes                                                                       |
-| `--size`            | Number of NFTs to mint                                                       | No (default: `1`)                                                         |
-| `--royalty-address` | Royalty recipient address                                                    | No (default: `WALLET_ADDRESS`)                                            |
-| `--ref-address`     | Address to send CIP-68 reference (100) tokens and the royalty (500) token to | No (default: `alwaysFails` script parameterized by your payment key hash) |
+| Flag                | Description                                                                                                                                                       | Required                                                                  |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `--name`            | Base name for the NFT assets (e.g. `myNFT` → `myNFT0`, `myNFT1`, …)                                                                                               | Yes                                                                       |
+| `--image`           | IPFS URL for the NFT image                                                                                                                                        | Yes                                                                       |
+| `--deadline`        | Minting deadline in ISO 8601 format (e.g. `2027-12-22T23:59:59Z`)                                                                                                 | Yes                                                                       |
+| `--fee`             | Royalty fee as a percentage (e.g. `1.6` for 1.6%)                                                                                                                 | Yes                                                                       |
+| `--size`            | Number of NFTs to mint                                                                                                                                            | No (default: `1`)                                                         |
+| `--royalty-address` | Royalty recipient address                                                                                                                                         | No (default: `WALLET_ADDRESS`)                                            |
+| `--ref-address`     | Address to send CIP-68 reference (100) tokens and the royalty (500) token to                                                                                      | No (default: `alwaysFails` script parameterized by your payment key hash) |
+| `--royalty-postfix` | Positive integer postfix for CIP-102 v2 (mints `(500)Royalty<n>` with datum `version = 2` and sets the reference datum's `royalty_included` selector accordingly) | No (default: v1 base `(500)Royalty` token)                                |
 
 > **Note:** Use `npm run cli -- --` (two `--` separators) before the subcommand when passing flags. The first `--` tells npm to stop processing its own options; the second `--` is passed to the script to signal end of positional arguments. This prevents npm from intercepting flags like `--name` (a reserved npm config key) or warning about unknown ones. Positional arguments (like the policy ID for `get-royalties`) can be passed directly with just one `--`.
 
